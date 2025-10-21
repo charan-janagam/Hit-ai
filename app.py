@@ -1,14 +1,19 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import json
+import os
 
 app = Flask(__name__)
 
-# Your OpenRouter API configuration
-OPENROUTER_API_KEY = "<OPENROUTER_API_KEY>"  # Replace with your actual API key
+# ==========================
+# 🔑 Configuration
+# ==========================
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Use environment variable for security
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Sri chaRAN's profile data
+# ==========================
+# 👤 Sri chaRAN's Profile Data
+# ==========================
 PROFILE_DATA = {
     "name": "Sri chaRAN",
     "age": 16,
@@ -52,7 +57,9 @@ PROFILE_DATA = {
     }
 }
 
-# System prompt to personalize the chatbot
+# ==========================
+# 🧠 System Prompt
+# ==========================
 SYSTEM_PROMPT = f"""You are a personal AI assistant for {PROFILE_DATA['name']}, a {PROFILE_DATA['age']}-year-old {PROFILE_DATA['role']} from {PROFILE_DATA['location']}. 
 
 Here's what you know about them:
@@ -66,8 +73,12 @@ Here's what you know about them:
 - Personality: {PROFILE_DATA['personality_vibe']['tone']} with {PROFILE_DATA['personality_vibe']['humor_style']}
 - Study Pattern: {PROFILE_DATA['student_status']['study_pattern']}
 
-Respond in a helpful, friendly, and encouraging manner. Keep responses concise and engaging. When giving suggestions or advice, tailor it to their specific situation, interests, and skill level."""
+Respond in a helpful, friendly, and encouraging manner. Keep responses concise and engaging. When giving suggestions or advice, tailor it to their specific situation, interests, and skill level.
+"""
 
+# ==========================
+# 🌐 Routes
+# ==========================
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -76,24 +87,22 @@ def home():
 def chat():
     try:
         data = request.json
-        user_message = data.get('message', '')
+        user_message = data.get('message', '').strip()
         
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
         
-        # Prepare messages for the API
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message}
         ]
         
-        # Make request to OpenRouter API
         response = requests.post(
             url=API_URL,
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:5000",
+                "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
                 "X-Title": "Sri chaRAN Personal Chatbot"
             },
             json={
@@ -121,5 +130,9 @@ def chat():
 def get_profile():
     return jsonify(PROFILE_DATA)
 
+# ==========================
+# 🚀 Run Server (Render-compatible)
+# ==========================
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

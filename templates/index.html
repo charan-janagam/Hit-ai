@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri chaRAN - AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-box">
+            <div class="chat-header">
+                <div class="header-content">
+                    <h1>💬 Sri chaRAN's AI Assistant</h1>
+                    <p>Powered by DeepSeek v3.1</p>
+                </div>
+            </div>
+
+            <div class="suggested-prompts">
+                <button class="prompt-btn" onclick="sendPrompt('Tell me about my skills and projects')">
+                    💻 My Skills
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Suggest a Python or Flask project idea')">
+                    🚀 Project Ideas
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('What should I learn next?')">
+                    📚 Learning Path
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
+                    💪 Workout
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi or anime series')">
+                    🎬 Entertainment
+                </button>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>Hey there! 👋 I'm your personal AI assistant. I know all about your skills, interests, and goals. Ask me anything!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message here..." 
+                    autocomplete="off"
+                >
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span>Send</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

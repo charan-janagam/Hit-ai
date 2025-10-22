@@ -3,6 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri chaRAN - AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-box">
+            <div class="chat-header">
+                <div class="header-content">
+                    <h1>💬 Sri chaRAN's AI Assistant</h1>
+                    <p>Powered by DeepSeek v3.1</p>
+                </div>
+            </div>
+
+            <div class="suggested-prompts">
+                <button class="prompt-btn" onclick="sendPrompt('Tell me about my skills and projects')">
+                    💻 My Skills
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Suggest a Python or Flask project idea')">
+                    🚀 Project Ideas
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('What should I learn next?')">
+                    📚 Learning Path
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
+                    💪 Workout
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi or anime series')">
+                    🎬 Entertainment
+                </button>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>Hey there! 👋 I'm your personal AI assistant. I know all about your skills, interests, and goals. Ask me anything!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message here..." 
+                    autocomplete="off"
+                >
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span>Send</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri chaRAN - AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-box">
+            <div class="chat-header">
+                <div class="header-content">
+                    <h1>💬 Sri chaRAN's AI Assistant</h1>
+                    <p>Powered by DeepSeek v3.1</p>
+                </div>
+            </div>
+
+            <div class="suggested-prompts">
+                <button class="prompt-btn" onclick="sendPrompt('Tell me about my skills and projects')">
+                    💻 My Skills
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Suggest a Python or Flask project idea')">
+                    🚀 Project Ideas
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('What should I learn next?')">
+                    📚 Learning Path
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
+                    💪 Workout
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi or anime series')">
+                    🎬 Entertainment
+                </button>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>Hey there! 👋 I'm your personal AI assistant. I know all about your skills, interests, and goals. Ask me anything!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message here..." 
+                    autocomplete="off"
+                >
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span>Send</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sri chaRAN - AI Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="chat-box">
+            <div class="chat-header">
+                <div class="header-content">
+                    <h1>💬 Sri chaRAN's AI Assistant</h1>
+                    <p>Powered by DeepSeek v3.1</p>
+                </div>
+            </div>
+
+            <div class="suggested-prompts">
+                <button class="prompt-btn" onclick="sendPrompt('Tell me about my skills and projects')">
+                    💻 My Skills
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Suggest a Python or Flask project idea')">
+                    🚀 Project Ideas
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('What should I learn next?')">
+                    📚 Learning Path
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
+                    💪 Workout
+                </button>
+                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi or anime series')">
+                    🎬 Entertainment
+                </button>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message bot-message">
+                    <div class="message-content">
+                        <p>Hey there! 👋 I'm your personal AI assistant. I know all about your skills, interests, and goals. Ask me anything!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+
+            <div class="input-area">
+                <input 
+                    type="text" 
+                    id="messageInput" 
+                    placeholder="Type your message here..." 
+                    autocomplete="off"
+                >
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span>Send</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sri chaRAN - AI Assistant Preview</title>
     <style>
         * {
@@ -432,107 +630,4 @@
                     🔥 Level Up
                 </button>
                 <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
-                    💪 Training Arc
-                </button>
-                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi or anime series')">
-                    🎬 Anime Picks
-                </button>
-            </div>
-
-            <div class="messages-container" id="messagesContainer">
-                <div class="message bot-message">
-                    <div class="message-content">
-                        <p>Yo! 👋 Ready to level up? I'm your AI companion who knows everything about you - your coding skills, fitness grind, and anime taste. Let's get it! ⚡</p>
-                    </div>
-                </div>
-                <div class="message user-message">
-                    <div class="message-content">
-                        <p>What are my current skills?</p>
-                    </div>
-                </div>
-                <div class="message bot-message">
-                    <div class="message-content">
-                        <p>You're skilled in <strong>Python, HTML, and Flask</strong>! You're crushing it as an intermediate Python learner. Your main quest: master AI chatbot development and level up those Flask skills. Keep that momentum going! 🚀⚡</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="typing-indicator" id="typingIndicator">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-
-            <div class="input-area">
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    placeholder="What's on your mind?" 
-                    autocomplete="off"
-                >
-                <button id="sendBtn" onclick="sendMessage()">
-                    <span>Send</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const messagesContainer = document.getElementById('messagesContainer');
-        const typingIndicator = document.getElementById('typingIndicator');
-
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            
-            if (!message) return;
-            
-            addMessage(message, 'user');
-            messageInput.value = '';
-            
-            typingIndicator.classList.add('active');
-            sendBtn.disabled = true;
-            
-            setTimeout(() => {
-                typingIndicator.classList.remove('active');
-                addMessage('This is a preview! Connect to the Flask backend to get real AI responses powered by your profile data. ⚡🤖', 'bot');
-                sendBtn.disabled = false;
-            }, 1500);
-        }
-
-        function addMessage(text, type) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerHTML = `<p>${text}</p>`;
-            
-            messageDiv.appendChild(contentDiv);
-            messagesContainer.appendChild(messageDiv);
-            
-            messagesContainer.scrollTo({
-                top: messagesContainer.scrollHeight,
-                behavior: 'smooth'
-            });
-        }
-
-        function sendPrompt(promptText) {
-            messageInput.value = promptText;
-            sendMessage();
-        }
-
-        messageInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                sendMessage();
-            }
-        });
-
-        window.addEventListener('load', function() {
-            messageInput.focus();
-        });
-    </script>
-</body>
-</html>
+              

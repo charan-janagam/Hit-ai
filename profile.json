@@ -1,0 +1,42 @@
+{
+  "name": "Sri chaRAN",
+  "age": 16,
+  "role": "Intermediate 1st year student",
+  "student_status": {
+    "level": "Intermediate",
+    "year": 1,
+    "stream": "MPC",
+    "hostel_life": true,
+    "study_pattern": "Can only practice programming during holidays or vacations when at home"
+  },
+  "interests": {
+    "main_focus": "Developing programming and coding skills",
+    "skills": ["Python", "HTML", "Flask"],
+    "hobbies": ["Sketching", "Watching sci-fi movies", "Horror movies", "Anime"]
+  },
+  "fitness_profile": {
+    "training_type": "Calisthenics",
+    "abilities": {
+      "hand_lever_hold_seconds": 25,
+      "regular_pushups": 30,
+      "diamond_pushups": 15
+    },
+    "past_interest": "Boxing practice with non-blood related brother"
+  },
+  "learning_goals": {
+    "focus": "Master Python and learn AI chatbot development",
+    "current_progress": "Intermediate Python learner",
+    "next_target": "Understand Flask deeply and apply in projects"
+  },
+  "personality_vibe": {
+    "tone": "Chill, confident, and witty",
+    "humor_style": "Playful with smooth rizz and light roast energy",
+    "fav_dialogue": "⚡ It's all about Sri chaRAN",
+    "chat_vibe": "Energetic, real, and expressive"
+  },
+  "location": "India",
+  "misc": {
+    "languages_known": ["English", "Telugu"],
+    "tech_interest": ["AI", "Flask projects", "Web development"]
+  }
+}

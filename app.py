@@ -2,8 +2,15 @@ from flask import Flask, render_template, request, jsonify
 import requests
 import os
 import json
+import logging
 
 app = Flask(__name__)
+
+# ======================================
+# Logging (useful on Render)
+# ======================================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ======================================
 # 🔐 Configuration
@@ -19,7 +26,7 @@ def load_profile_data():
         with open('profile.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        print("Warning: profile.json not found. Using default data.")
+        logger.warning("profile.json not found. Using default data.")
         # Fallback to default data if file doesn't exist
         return {
             "name": "Sri chaRAN",
@@ -80,7 +87,7 @@ CRITICAL RULES:
 
 INFORMATION ABOUT {profile['name']}:
 - Age: {profile['age']} years old
-- Role: {profile['role']} 
+- Role: {profile['role']}
 - Location: {profile['location']}
 - Technical Skills: {', '.join(profile['interests']['skills'])}
 - Tech Interests: {', '.join(profile['misc']['tech_interest'])}
@@ -126,7 +133,7 @@ def home():
 def chat():
     try:
         data = request.get_json()
-        user_message = data.get("message", "").strip()
+        user_message = data.get("message", "").strip() if data else ""
 
         if not user_message:
             return jsonify({"error": "No message provided"}), 400
@@ -136,36 +143,68 @@ def chat():
             {"role": "user", "content": user_message}
         ]
 
+        # Headers (OpenRouter example)
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}" if OPENROUTER_API_KEY else "",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
             "X-Title": "Sri chaRAN Personal Chatbot"
         }
 
+        # Use a working DeepSeek model
         payload = {
-            "model": "deepseek/deepseek-chat-v3.1:free",
+            "model": "deepseek/deepseek-r1-0528-qwen3-8b",
             "messages": messages
         }
 
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
+        # sanity check: ensure API key exists
+        if not OPENROUTER_API_KEY:
+            logger.error("OPENROUTER_API_KEY is not set in environment variables.")
+            return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
+        # Send request to OpenRouter (use data=json.dumps to match example)
+        response = requests.post(
+            url=API_URL,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=30
+        )
+
+        # Handle responses
         if response.status_code == 200:
-            result = response.json()
-            bot_message = result["choices"][0]["message"]["content"]
-            return jsonify({"response": bot_message})
+            try:
+                result = response.json()
+                # Typical response shape: {"choices": [{"message": {"content": "..."}}], ...}
+                bot_message = result["choices"][0]["message"]["content"]
+                return jsonify({"response": bot_message})
+            except (KeyError, ValueError) as parse_err:
+                logger.exception("Failed to parse response JSON from OpenRouter.")
+                return jsonify({"error": "Failed to parse OpenRouter response", "details": str(parse_err), "raw": response.text}), 500
+
+        # Provide helpful error messages for common status codes
+        elif response.status_code == 401:
+            logger.error("OpenRouter returned 401 - check your API key.")
+            return jsonify({"error": "OpenRouter authentication failed (401). Check OPENROUTER_API_KEY."}), 500
+        elif response.status_code == 404:
+            # Specific hint: model might not exist
+            logger.error("OpenRouter returned 404 - model or endpoint not found.")
+            return jsonify({"error": "OpenRouter returned 404. Model or endpoint not found. Check the model name." , "raw": response.text}), 500
         else:
+            logger.error("OpenRouter API error: %s %s", response.status_code, response.text)
             return jsonify({"error": f"API Error {response.status_code}: {response.text}"}), 500
 
     except requests.exceptions.Timeout:
-        return jsonify({"error": "Request timed out. Please try again."}), 500
+        logger.exception("OpenRouter request timed out.")
+        return jsonify({"error": "Request to OpenRouter timed out. Please try again."}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.exception("Unhandled exception in /api/chat")
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
     return jsonify(PROFILE_DATA)
+
 
 # ======================================
 # 🚀 Run App (Render-compatible)

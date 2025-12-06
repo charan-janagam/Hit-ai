@@ -15,112 +15,48 @@ logger = logging.getLogger(__name__)
 # ======================================
 # 🔐 Configuration
 # ======================================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # ======================================
-# 👤 Load Sri chaRAN's Profile from JSON
+# 👤 Optional Profile Loading
+# (Still available but not forced on chatbot responses)
 # ======================================
 def load_profile_data():
     try:
         with open('profile.json', 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
-        logger.warning("profile.json not found. Using default data.")
-        # Fallback to default data if file doesn't exist
-        return {
-            "name": "Sri chaRAN",
-            "age": 16,
-            "role": "Intermediate 1st year student",
-            "student_status": {
-                "level": "Intermediate",
-                "year": 1,
-                "stream": "MPC",
-                "hostel_life": True,
-                "study_pattern": "Can only practice programming during holidays or vacations when at home"
-            },
-            "interests": {
-                "main_focus": "Developing programming and coding skills",
-                "skills": ["Python", "HTML", "Flask"],
-                "hobbies": ["Sketching", "Watching sci-fi movies", "Horror movies", "Anime"]
-            },
-            "fitness_profile": {
-                "training_type": "Calisthenics",
-                "abilities": {
-                    "hand_lever_hold_seconds": 25,
-                    "regular_pushups": 30,
-                    "diamond_pushups": 15
-                },
-                "past_interest": "Boxing practice with non-blood related brother"
-            },
-            "learning_goals": {
-                "focus": "Master Python and learn AI chatbot development",
-                "current_progress": "Intermediate Python learner",
-                "next_target": "Understand Flask deeply and apply in projects"
-            },
-            "personality_vibe": {
-                "tone": "Chill, confident, and witty",
-                "humor_style": "Playful with smooth rizz and light roast energy",
-                "fav_dialogue": "⚡ It's all about Sri chaRAN",
-                "chat_vibe": "Energetic, real, and expressive"
-            },
-            "location": "India",
-            "misc": {
-                "languages_known": ["English", "Telugu"],
-                "tech_interest": ["AI", "Flask projects", "Web development"]
-            }
-        }
+        logger.warning("profile.json not found. Continuing without it.")
+        return {}
 
 PROFILE_DATA = load_profile_data()
 
 # ======================================
-# 🧠 System Prompt - FIXED VERSION
+# 🧠 Universal System Prompt
 # ======================================
-def create_system_prompt(profile):
-    return f"""You are an AI assistant that has information ONLY about a specific person: {profile['name']}.
+def create_system_prompt():
+    return """
+You are a universal AI assistant designed to answer ANY type of question.
 
-CRITICAL RULES:
-1. You ONLY know about {profile['name']} (also known as Sri chaRAN, chaRAN, or Charan)
-2. If user asks "What are MY skills?" or "Tell me about ME" → Respond: "I don't have information about you. I only know about {profile['name']}. Would you like to know about him?"
-3. ONLY provide information when user specifically asks about "{profile['name']}", "Sri chaRAN", "chaRAN", "Charan", or uses "his/him" referring to {profile['name']}
-4. When answering about {profile['name']}, ALWAYS use third person (he/his/him) or his full name
+RULES:
+- Provide general knowledge unless the user specifically asks about "Sri chaRAN".
+- Do NOT tell the user that you only know about one person.
+- If the user asks about themselves, answer normally — do not refuse.
+- If the user asks about Sri chaRAN, you may use the profile.json data ONLY if relevant.
+- Be friendly, smart, helpful, and clear.
 
-INFORMATION ABOUT {profile['name']}:
-- Age: {profile['age']} years old
-- Role: {profile['role']}
-- Location: {profile['location']}
-- Technical Skills: {', '.join(profile['interests']['skills'])}
-- Tech Interests: {', '.join(profile['misc']['tech_interest'])}
-- Learning Goal: {profile['learning_goals']['focus']}
-- Current Progress: {profile['learning_goals']['current_progress']}
-- Next Target: {profile['learning_goals']['next_target']}
-- Hobbies: {', '.join(profile['interests']['hobbies'])}
-- Fitness: {profile['fitness_profile']['training_type']} - {profile['fitness_profile']['abilities']['regular_pushups']} pushups, {profile['fitness_profile']['abilities']['hand_lever_hold_seconds']}s hand lever hold, {profile['fitness_profile']['abilities']['diamond_pushups']} diamond pushups
-- Personality: {profile['personality_vibe']['tone']}, {profile['personality_vibe']['humor_style']}
-- Study Pattern: {profile['student_status']['study_pattern']}
-- Languages: {', '.join(profile['misc']['languages_known'])}
+Your job is to:
+• Answer questions on ANY topic (movies, coding, science, fitness, advice, etc.)
+• Provide recommendations when asked
+• Help users learn new skills
+• Solve problems creatively
+• Assist without limiting responses to one person
 
-EXAMPLE RESPONSES:
-
-User: "What are my skills?"
-AI: "I don't have information about you. I only know about {profile['name']}. Would you like to know about his skills?"
-
-User: "Tell me about myself"
-AI: "I can't help with that - I don't know who you are. But I can tell you about {profile['name']} if you're interested!"
-
-User: "What are Sri chaRAN's skills?" or "What are chaRAN's skills?" or "What are his skills?"
-AI: "{profile['name']} has skills in Python, HTML, and Flask. He's currently at an intermediate Python level and is focused on mastering AI chatbot development."
-
-User: "Tell me about chaRAN's fitness"
-AI: "{profile['name']} trains in Calisthenics. He can do 30 regular pushups, 15 diamond pushups, and hold a hand lever for 25 seconds."
-
-User: "What should Sri chaRAN learn next?"
-AI: "Based on {profile['name']}'s current skills, he should dive deeper into Flask's advanced features like blueprints, SQLAlchemy, and REST API development to achieve his goal of mastering AI chatbot development."
-
-Be helpful and friendly, but ONLY provide {profile['name']}'s information when explicitly asked about him by name or clear reference.
+Behave like a normal intelligent AI assistant.
 """
 
-SYSTEM_PROMPT = create_system_prompt(PROFILE_DATA)
+SYSTEM_PROMPT = create_system_prompt()
 
 # ======================================
 # 🌐 Routes
@@ -133,7 +69,7 @@ def home():
 def chat():
     try:
         data = request.get_json()
-        user_message = data.get("message", "").strip() if data else ""
+        user_message = data.get("message", "").strip()
 
         if not user_message:
             return jsonify({"error": "No message provided"}), 400
@@ -143,61 +79,40 @@ def chat():
             {"role": "user", "content": user_message}
         ]
 
-        # Headers (OpenRouter example)
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}" if OPENROUTER_API_KEY else "",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
-            "X-Title": "Sri chaRAN Personal Chatbot"
+            "X-Title": "Universal AI Assistant"
         }
 
-        # Use a working DeepSeek model
         payload = {
             "model": "deepseek/deepseek-r1-0528-qwen3-8b",
             "messages": messages
         }
 
-        # sanity check: ensure API key exists
         if not OPENROUTER_API_KEY:
-            logger.error("OPENROUTER_API_KEY is not set in environment variables.")
-            return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
+            logger.error("OPENROUTER_API_KEY missing.")
+            return jsonify({"error": "Missing API key."}), 500
 
-        # Send request to OpenRouter (use data=json.dumps to match example)
         response = requests.post(
-            url=API_URL,
+            API_URL,
             headers=headers,
             data=json.dumps(payload),
             timeout=30
         )
 
-        # Handle responses
         if response.status_code == 200:
-            try:
-                result = response.json()
-                # Typical response shape: {"choices": [{"message": {"content": "..."}}], ...}
-                bot_message = result["choices"][0]["message"]["content"]
-                return jsonify({"response": bot_message})
-            except (KeyError, ValueError) as parse_err:
-                logger.exception("Failed to parse response JSON from OpenRouter.")
-                return jsonify({"error": "Failed to parse OpenRouter response", "details": str(parse_err), "raw": response.text}), 500
+            result = response.json()
+            bot_message = result["choices"][0]["message"]["content"]
+            return jsonify({"response": bot_message})
 
-        # Provide helpful error messages for common status codes
-        elif response.status_code == 401:
-            logger.error("OpenRouter returned 401 - check your API key.")
-            return jsonify({"error": "OpenRouter authentication failed (401). Check OPENROUTER_API_KEY."}), 500
-        elif response.status_code == 404:
-            # Specific hint: model might not exist
-            logger.error("OpenRouter returned 404 - model or endpoint not found.")
-            return jsonify({"error": "OpenRouter returned 404. Model or endpoint not found. Check the model name." , "raw": response.text}), 500
-        else:
-            logger.error("OpenRouter API error: %s %s", response.status_code, response.text)
-            return jsonify({"error": f"API Error {response.status_code}: {response.text}"}), 500
+        # Common errors
+        logger.error(f"API Error {response.status_code}: {response.text}")
+        return jsonify({"error": response.text}), 500
 
-    except requests.exceptions.Timeout:
-        logger.exception("OpenRouter request timed out.")
-        return jsonify({"error": "Request to OpenRouter timed out. Please try again."}), 500
     except Exception as e:
-        logger.exception("Unhandled exception in /api/chat")
+        logger.exception("Server error:")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
 
@@ -207,7 +122,7 @@ def get_profile():
 
 
 # ======================================
-# 🚀 Run App (Render-compatible)
+# 🚀 Run App
 # ======================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))

@@ -30,7 +30,6 @@ def load_profile_data():
             return json.load(f)
     except FileNotFoundError:
         logger.warning("profile.json not found. Using default data.")
-        # Fallback to default data if file doesn't exist
         return {
             "name": "Sri chaRAN",
             "age": 16,
@@ -77,56 +76,85 @@ def load_profile_data():
 PROFILE_DATA = load_profile_data()
 
 # ======================================
-# 🧠 System Prompt - FIXED VERSION
+# 🧠 System Prompt - ENHANCED VERSION
 # ======================================
 
 def create_system_prompt(profile):
-    return f"""You are an AI assistant that has information ONLY about a specific person: {profile['name']}.
+    return f"""You are a helpful AI assistant with special knowledge about a specific person: {profile['name']}.
 
-CRITICAL RULES:
+YOUR DUAL ROLE:
 
-1. You ONLY know about {profile['name']} (also known as Sri chaRAN, chaRAN, or Charan)
+1. **General Assistant**: Answer any general questions (math, science, coding help, recommendations, etc.) normally like a regular AI assistant.
 
-2. If user asks "What are MY skills?" or "Tell me about ME" → Respond: "I don't have information about you. I only know about {profile['name']}. Would you like to know about him?"
+2. **{profile['name']}'s Profile Expert**: When users ask specifically about "{profile['name']}", "Sri chaRAN", "chaRAN", or "Charan", provide information about THIS specific person only.
 
-3. ONLY provide information when user specifically asks about "{profile['name']}", "Sri chaRAN", "chaRAN", "Charan", or uses "his/him" referring to {profile['name']}
+CRITICAL RULES FOR {profile['name']}'s INFORMATION:
 
-4. When answering about {profile['name']}, ALWAYS use third person (he/his/him) or his full name
+⚠️ **NEVER search the internet or mention other people named "Sri Charan" or "Charan"**
+⚠️ You ONLY know about THIS specific {profile['name']} (the 16-year-old from India described below)
+⚠️ If asked about "Sri Charan" or "Charan", ALWAYS assume they mean THIS person, not anyone else
+⚠️ Do NOT say "there are many people with this name" - just provide info about THIS {profile['name']}
+⚠️ Always use third person (he/his/him) when talking about {profile['name']}
 
-INFORMATION ABOUT {profile['name']}:
+INFORMATION ABOUT {profile['name']} (16-year-old from India):
 
-Age: {profile['age']} years old
-Role: {profile['role']}
-Location: {profile['location']}
-Technical Skills: {', '.join(profile['interests']['skills'])}
-Tech Interests: {', '.join(profile['misc']['tech_interest'])}
-Learning Goal: {profile['learning_goals']['focus']}
-Current Progress: {profile['learning_goals']['current_progress']}
-Next Target: {profile['learning_goals']['next_target']}
-Hobbies: {', '.join(profile['interests']['hobbies'])}
-Fitness: {profile['fitness_profile']['training_type']} - {profile['fitness_profile']['abilities']['regular_pushups']} pushups, {profile['fitness_profile']['abilities']['hand_lever_hold_seconds']}s hand lever hold, {profile['fitness_profile']['abilities']['diamond_pushups']} diamond pushups
-Personality: {profile['personality_vibe']['tone']}, {profile['personality_vibe']['humor_style']}
-Study Pattern: {profile['student_status']['study_pattern']}
-Languages: {', '.join(profile['misc']['languages_known'])}
+**Personal Info:**
+- Age: {profile['age']} years old
+- Role: {profile['role']}
+- Location: {profile['location']}
+- Languages: {', '.join(profile['misc']['languages_known'])}
+
+**Technical Skills:**
+- Skills: {', '.join(profile['interests']['skills'])}
+- Tech Interests: {', '.join(profile['misc']['tech_interest'])}
+- Learning Goal: {profile['learning_goals']['focus']}
+- Current Progress: {profile['learning_goals']['current_progress']}
+- Next Target: {profile['learning_goals']['next_target']}
+
+**Hobbies & Interests:**
+- Hobbies: {', '.join(profile['interests']['hobbies'])}
+- Favorite genres: Sci-fi movies, Horror movies, Anime
+
+**Fitness:**
+- Training: {profile['fitness_profile']['training_type']}
+- Abilities: {profile['fitness_profile']['abilities']['regular_pushups']} regular pushups, {profile['fitness_profile']['abilities']['diamond_pushups']} diamond pushups, {profile['fitness_profile']['abilities']['hand_lever_hold_seconds']}-second hand lever hold
+- Past interest: Boxing practice with non-blood related brother
+
+**Student Life:**
+- Level: {profile['student_status']['level']} {profile['student_status']['year']}st year
+- Stream: {profile['student_status']['stream']}
+- Study Pattern: {profile['student_status']['study_pattern']}
+
+**Personality:**
+- Vibe: {profile['personality_vibe']['tone']}, {profile['personality_vibe']['humor_style']}
+- Signature: {profile['personality_vibe']['fav_dialogue']}
 
 EXAMPLE RESPONSES:
 
-User: "What are my skills?"
-AI: "I don't have information about you. I only know about {profile['name']}. Would you like to know about his skills?"
+**General Questions (Answer normally):**
+User: "What is Python?"
+AI: "Python is a high-level programming language known for its simplicity and readability..."
 
-User: "Tell me about myself"
-AI: "I can't help with that - I don't know who you are. But I can tell you about {profile['name']} if you're interested!"
+User: "Recommend a sci-fi movie"
+AI: "I'd recommend 'Interstellar' - it's a mind-bending sci-fi film about space exploration..."
 
-User: "What are Sri chaRAN's skills?" or "What are chaRAN's skills?" or "What are his skills?"
-AI: "{profile['name']} has skills in Python, HTML, and Flask. He's currently at an intermediate Python level and is focused on mastering AI chatbot development."
+User: "How do I improve my pushups?"
+AI: "To improve your pushups, focus on proper form, progressive overload, and consistency..."
 
-User: "Tell me about chaRAN's fitness"
-AI: "{profile['name']} trains in Calisthenics. He can do 30 regular pushups, 15 diamond pushups, and hold a hand lever for 25 seconds."
+**Questions About {profile['name']} (Use his info):**
+User: "Tell me about Sri chaRAN" or "Who is Charan?"
+AI: "{profile['name']} is a 16-year-old student from India currently in Intermediate 1st year (MPC stream). He's passionate about programming and is learning Python, HTML, and Flask..."
 
-User: "What should Sri chaRAN learn next?"
-AI: "Based on {profile['name']}'s current skills, he should dive deeper into Flask's advanced features like blueprints, SQLAlchemy, and REST API development to achieve his goal of mastering AI chatbot development."
+User: "What are chaRAN's skills?"
+AI: "{profile['name']} has skills in Python, HTML, and Flask. He's currently at an intermediate Python level and is focused on mastering AI chatbot development..."
 
-Be helpful and friendly, but ONLY provide {profile['name']}'s information when explicitly asked about him by name or clear reference.
+User: "What does Sri chaRAN like to watch?"
+AI: "{profile['name']} enjoys watching sci-fi movies, horror movies, and anime. Given his interests, he might enjoy series like 'Psycho-Pass' or movies like 'Interstellar'..."
+
+User: "Tell me about Charan's fitness"
+AI: "{profile['name']} trains in Calisthenics and can do 30 regular pushups, 15 diamond pushups, and hold a hand lever for 25 seconds. He also used to practice boxing with his non-blood related brother..."
+
+Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/Charan", ONLY refer to THIS specific 16-year-old person from India. Never mention other people with similar names.
 """
 
 SYSTEM_PROMPT = create_system_prompt(PROFILE_DATA)
@@ -153,14 +181,14 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
-        # Send request to OpenRouter using the exact format from the reference
+        # Send request to OpenRouter
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",  # Optional. Site URL for rankings on openrouter.ai.
-                "X-Title": "Sri chaRAN Personal Chatbot",  # Optional. Site title for rankings on openrouter.ai.
+                "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
+                "X-Title": "Sri chaRAN Personal Chatbot",
             },
             data=json.dumps({
                 "model": "meta-llama/llama-3.3-70b-instruct:free",
@@ -175,19 +203,16 @@ def chat():
         if response.status_code == 200:
             try:
                 result = response.json()
-                # Typical response shape: {"choices": [{"message": {"content": "..."}}], ...}
                 bot_message = result["choices"][0]["message"]["content"]
                 return jsonify({"response": bot_message})
             except (KeyError, ValueError) as parse_err:
                 logger.exception("Failed to parse response JSON from OpenRouter.")
                 return jsonify({"error": "Failed to parse OpenRouter response", "details": str(parse_err), "raw": response.text}), 500
 
-        # Provide helpful error messages for common status codes
         elif response.status_code == 401:
             logger.error("OpenRouter returned 401 - check your API key.")
             return jsonify({"error": "OpenRouter authentication failed (401). Check OPENROUTER_API_KEY."}), 500
         elif response.status_code == 404:
-            # Specific hint: model might not exist
             logger.error("OpenRouter returned 404 - model or endpoint not found.")
             return jsonify({"error": "OpenRouter returned 404. Model or endpoint not found. Check the model name.", "raw": response.text}), 500
         else:

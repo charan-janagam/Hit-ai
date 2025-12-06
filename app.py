@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 import requests
 import os
-import profile.json
+import json
 import logging
 import re
 

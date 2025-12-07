@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 # ======================================
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
-API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # ======================================
 # 👤 Load Sri chaRAN's Profile from JSON
@@ -67,6 +66,10 @@ def load_profile_data():
                 "chat_vibe": "Energetic, real, and expressive"
             },
             "location": "India",
+            "contact": {
+                "email": "charan6401@gmail.com",
+                "instagram": "sri_charan_janagam"
+            },
             "misc": {
                 "languages_known": ["English", "Telugu"],
                 "tech_interest": ["AI", "Flask projects", "Web development"]
@@ -103,6 +106,7 @@ INFORMATION ABOUT {profile['name']} (16-year-old from India):
 - Role: {profile['role']}
 - Location: {profile['location']}
 - Languages: {', '.join(profile['misc']['languages_known'])}
+- Contact: Email - {profile['contact']['email']}, Instagram - @{profile['contact']['instagram']}
 
 **Technical Skills:**
 - Skills: {', '.join(profile['interests']['skills'])}
@@ -154,6 +158,9 @@ AI: "{profile['name']} enjoys watching sci-fi movies, horror movies, and anime. 
 User: "Tell me about Charan's fitness"
 AI: "{profile['name']} trains in Calisthenics and can do 30 regular pushups, 15 diamond pushups, and hold a hand lever for 25 seconds. He also used to practice boxing with his non-blood related brother..."
 
+User: "How can I contact chaRAN?"
+AI: "You can reach {profile['name']} via email at {profile['contact']['email']} or on Instagram at @{profile['contact']['instagram']}."
+
 Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/Charan", ONLY refer to THIS specific 16-year-old person from India. Never mention other people with similar names.
 """
 
@@ -181,7 +188,7 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
-        # Send request to OpenRouter
+        # Send request to OpenRouter with updated format
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -233,7 +240,3 @@ def get_profile():
 # ======================================
 # 🚀 Run App (Render-compatible)
 # ======================================
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)

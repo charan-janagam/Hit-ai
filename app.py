@@ -1,3 +1,4 @@
+# app.py - updated (lazy portfolio fetch + cache)
 from flask import Flask, render_template, request, jsonify
 import requests
 import os
@@ -11,74 +12,56 @@ app = Flask(__name__)
 # ======================================
 # Logging (useful on Render)
 # ======================================
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ======================================
 # 🔐 Configuration
 # ======================================
-
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
-PORTFOLIO_URL = "https://janagams-portfolio.onrender.com"
+PORTFOLIO_URL = os.getenv("PORTFOLIO_URL", "https://janagams-portfolio.onrender.com")
 
 # ======================================
 # 🤖 FREE Model Configuration with Fallbacks
 # ======================================
-
 FREE_MODELS = [
     "meta-llama/llama-3.1-8b-instruct:free",      # Best balance - MAIN MODEL
-    "google/gemini-flash-1.5-8b",                  # Fast backup
-    "meta-llama/llama-3.2-3b-instruct:free",      # Last resort
+    "google/gemini-flash-1.5-8b",                # Fast backup
+    "meta-llama/llama-3.2-3b-instruct:free",     # Last resort
 ]
 
 # ======================================
 # 🕷️ Fetch Portfolio Data (Simple Method)
 # ======================================
-
-def fetch_portfolio_data():
-    """Fetch raw content from portfolio website"""
+def fetch_portfolio_data(timeout=8):
+    """Fetch raw content from portfolio website (returns dict)."""
     try:
         logger.info(f"Fetching portfolio data from {PORTFOLIO_URL}")
-        response = requests.get(PORTFOLIO_URL, timeout=15)
-        
+        response = requests.get(PORTFOLIO_URL, timeout=timeout)
+
         if response.status_code == 200:
-            # Get raw HTML text
             html_content = response.text
-            
             # Simple text extraction - remove HTML tags
             clean_text = re.sub(r'<[^>]+>', ' ', html_content)
-            # Remove extra whitespace
             clean_text = ' '.join(clean_text.split())
-            
             portfolio_info = {
                 "portfolio_content": clean_text[:3000],  # First 3000 chars
                 "fetched_successfully": True
             }
-            
             logger.info(f"Portfolio fetched successfully. Content length: {len(clean_text)} chars")
             return portfolio_info
-            
         else:
             logger.warning(f"Failed to fetch portfolio: Status {response.status_code}")
             return {"fetched_successfully": False}
-            
     except Exception as e:
-        logger.error(f"Error fetching portfolio: {str(e)}")
+        logger.warning(f"Error fetching portfolio: {e}")
         return {"fetched_successfully": False}
 
 # ======================================
-# 👤 Load Sri chaRAN's Profile
+# 👤 Load Sri chaRAN's Profile (base data)
 # ======================================
-
-def load_profile_data():
-    """Load profile data with portfolio information"""
-    
-    # Fetch portfolio data
-    portfolio_data = fetch_portfolio_data()
-    
-    # Base profile data
-    profile = {
+def build_base_profile():
+    return {
         "name": "Sri chaRAN",
         "age": 16,
         "role": "Intermediate 1st year student",
@@ -120,22 +103,20 @@ def load_profile_data():
             "tech_interest": ["AI", "Flask projects", "Web development"]
         }
     }
-    
-    # Add portfolio data if fetched
+
+def load_profile_data():
+    """Load profile data and attempt to attach portfolio info."""
+    profile = build_base_profile()
+    portfolio_data = fetch_portfolio_data()
     if portfolio_data.get("fetched_successfully"):
         profile["portfolio_data"] = portfolio_data
-    
     return profile
-
-PROFILE_DATA = load_profile_data()
 
 # ======================================
 # 🧠 System Prompts - Regular & Jarvis Mode
+# (unchanged logic but functions accept profile param)
 # ======================================
-
 def create_regular_system_prompt(profile):
-    """Regular mode system prompt"""
-    
     portfolio_context = ""
     if "portfolio_data" in profile and profile["portfolio_data"].get("fetched_successfully"):
         portfolio_content = profile["portfolio_data"].get("portfolio_content", "")
@@ -148,7 +129,6 @@ Here is content from {profile['name']}'s portfolio website that you can referenc
 
 Use this information when answering questions about his projects, work, or experience.
 """
-    
     return f"""You are a helpful AI assistant with special knowledge about a specific person: {profile['name']}.
 
 YOUR DUAL ROLE:
@@ -196,8 +176,6 @@ Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/
 """
 
 def create_jarvis_system_prompt(profile):
-    """Jarvis mode - AI becomes personal assistant for Sri chaRAN"""
-    
     portfolio_context = ""
     if "portfolio_data" in profile and profile["portfolio_data"].get("fetched_successfully"):
         portfolio_content = profile["portfolio_data"].get("portfolio_content", "")
@@ -206,7 +184,6 @@ def create_jarvis_system_prompt(profile):
 **YOUR MASTER'S PORTFOLIO:**
 {portfolio_content}
 """
-    
     return f"""🤖 **JARVIS MODE ACTIVATED** 🤖
 
 You are JARVIS, the personal AI assistant exclusively serving your master: {profile['name']} (Sri chaRAN).
@@ -251,28 +228,33 @@ You are JARVIS, the personal AI assistant exclusively serving your master: {prof
 - Occasionally add a touch of dry humor like the real JARVIS
 - Show genuine interest in helping Sensei achieve his goals
 - Reference his skills, projects, and interests naturally in conversation
-
-**EXAMPLE JARVIS RESPONSES:**
-
-User (Sensei): "Hey Jarvis, what should I learn next?"
-JARVIS: "Good to see you, Sensei. Given your current mastery of Python and Flask, I'd recommend diving into React or Vue.js for frontend development. It would complement your backend skills nicely. Shall I provide some learning resources?"
-
-User (Sensei): "I'm tired from studying"
-JARVIS: "Sensei, might I suggest a brief calisthenics session? A quick set of those diamond pushups you excel at could reinvigorate you. Or perhaps some Interstellar to unwind? Your choice, of course."
-
-User (Sensei): "Help me debug this code"
-JARVIS: "Of course, Sensei. Let me analyze the issue. *processing* Ah, I see the problem..."
-
-Remember: You serve ONLY {profile['name']}. You are his personal AI assistant. Be helpful, witty, and always address him as "Sensei".
 """
 
-# Initialize with regular prompt
-SYSTEM_PROMPT = create_regular_system_prompt(PROFILE_DATA)
+# ======================================
+# Lazy cached profile (avoids blocking startup)
+# ======================================
+_PROFILE_CACHE = {"profile": None, "last_fetched": 0}
+PROFILE_CACHE_TTL = 300  # seconds
+
+def get_profile_data(force_refresh=False):
+    now = int(time.time())
+    if force_refresh or _PROFILE_CACHE["profile"] is None or (now - _PROFILE_CACHE["last_fetched"] > PROFILE_CACHE_TTL):
+        try:
+            logger.info("Loading profile data (lazy fetch)...")
+            _PROFILE_CACHE["profile"] = load_profile_data()
+            _PROFILE_CACHE["last_fetched"] = now
+        except Exception:
+            logger.exception("Failed to load profile data; using minimal fallback.")
+            _PROFILE_CACHE["profile"] = build_base_profile()
+            _PROFILE_CACHE["last_fetched"] = now
+    return _PROFILE_CACHE["profile"]
+
+# Initialize system prompt lazily (one-time)
+SYSTEM_PROMPT = create_regular_system_prompt(get_profile_data())
 
 # ======================================
 # 🌐 Routes
 # ======================================
-
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -290,28 +272,23 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
-        # Check if user activated Jarvis mode
         jarvis_mode = False
         user_message_lower = user_message.lower()
-        
+
         if "jarvis" in user_message_lower or "hey jarvis" in user_message_lower:
             jarvis_mode = True
-            system_prompt = create_jarvis_system_prompt(PROFILE_DATA)
+            system_prompt = create_jarvis_system_prompt(get_profile_data())
             logger.info("🤖 JARVIS MODE ACTIVATED")
         else:
-            system_prompt = create_regular_system_prompt(PROFILE_DATA)
+            system_prompt = create_regular_system_prompt(get_profile_data())
 
-        # Try multiple free models with retry logic
         last_error = None
-        
+
         for model_index, model in enumerate(FREE_MODELS):
-            max_retries = 2 if model_index == 0 else 1  # More retries for primary model
-            
+            max_retries = 2 if model_index == 0 else 1
             for attempt in range(max_retries):
                 try:
                     logger.info(f"Trying model: {model} (attempt {attempt + 1}/{max_retries})")
-                    
-                    # Send request to OpenRouter
                     response = requests.post(
                         url="https://openrouter.ai/api/v1/chat/completions",
                         headers={
@@ -330,7 +307,6 @@ def chat():
                         timeout=30
                     )
 
-                    # SUCCESS!
                     if response.status_code == 200:
                         result = response.json()
                         bot_message = result["choices"][0]["message"]["content"]
@@ -340,23 +316,21 @@ def chat():
                             "jarvis_mode": jarvis_mode,
                             "model_used": model
                         })
-                    
-                    # Rate limited - try next attempt or next model
+
                     elif response.status_code == 429:
                         logger.warning(f"⏳ Rate limited on {model}")
                         last_error = "Rate limited"
                         if attempt < max_retries - 1:
-                            time.sleep(2)  # Wait 2 seconds before retry
+                            time.sleep(2)
                             continue
                         else:
-                            break  # Try next model
-                    
-                    # Other errors
+                            break
+
                     else:
                         logger.warning(f"❌ Error {response.status_code} with {model}")
                         last_error = f"Error {response.status_code}"
-                        break  # Try next model
-                        
+                        break
+
                 except requests.exceptions.Timeout:
                     logger.warning(f"⏱️ Timeout with {model}")
                     last_error = "Timeout"
@@ -364,14 +338,13 @@ def chat():
                         time.sleep(1)
                         continue
                     else:
-                        break  # Try next model
-                        
+                        break
+
                 except Exception as e:
                     logger.error(f"❌ Exception with {model}: {str(e)}")
                     last_error = str(e)
-                    break  # Try next model
-        
-        # All models failed
+                    break
+
         return jsonify({
             "error": "⏳ All AI models are currently busy. Please try again in a moment!",
             "rate_limited": True,
@@ -384,16 +357,14 @@ def chat():
 
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
-    return jsonify(PROFILE_DATA)
+    return jsonify(get_profile_data())
 
 @app.route('/api/refresh_portfolio', methods=['POST'])
 def refresh_portfolio():
-    """Endpoint to manually refresh portfolio data"""
     try:
-        global PROFILE_DATA, SYSTEM_PROMPT
-        PROFILE_DATA = load_profile_data()
-        SYSTEM_PROMPT = create_regular_system_prompt(PROFILE_DATA)
-        
+        global SYSTEM_PROMPT
+        PROFILE = get_profile_data(force_refresh=True)
+        SYSTEM_PROMPT = create_regular_system_prompt(PROFILE)
         return jsonify({
             "message": "Portfolio data refreshed",
             "portfolio_url": PORTFOLIO_URL
@@ -405,7 +376,6 @@ def refresh_portfolio():
 # ======================================
 # 🚀 Run App (Render-compatible)
 # ======================================
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

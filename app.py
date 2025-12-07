@@ -3,6 +3,7 @@ import requests
 import os
 import json
 import logging
+import re
 
 app = Flask(__name__)
 
@@ -18,71 +19,125 @@ logger = logging.getLogger(__name__)
 # ======================================
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
+PORTFOLIO_URL = "https://janagams-portfolio.onrender.com"
 
 # ======================================
-# 👤 Load Sri chaRAN's Profile from JSON
+# 🕷️ Fetch Portfolio Data (Simple Method)
+# ======================================
+
+def fetch_portfolio_data():
+    """Fetch raw content from portfolio website"""
+    try:
+        logger.info(f"Fetching portfolio data from {PORTFOLIO_URL}")
+        response = requests.get(PORTFOLIO_URL, timeout=15)
+        
+        if response.status_code == 200:
+            # Get raw HTML text
+            html_content = response.text
+            
+            # Simple text extraction - remove HTML tags
+            clean_text = re.sub(r'<[^>]+>', ' ', html_content)
+            # Remove extra whitespace
+            clean_text = ' '.join(clean_text.split())
+            
+            portfolio_info = {
+                "portfolio_content": clean_text[:3000],  # First 3000 chars
+                "fetched_successfully": True
+            }
+            
+            logger.info(f"Portfolio fetched successfully. Content length: {len(clean_text)} chars")
+            return portfolio_info
+            
+        else:
+            logger.warning(f"Failed to fetch portfolio: Status {response.status_code}")
+            return {"fetched_successfully": False}
+            
+    except Exception as e:
+        logger.error(f"Error fetching portfolio: {str(e)}")
+        return {"fetched_successfully": False}
+
+# ======================================
+# 👤 Load Sri chaRAN's Profile
 # ======================================
 
 def load_profile_data():
-    try:
-        with open('profile.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        logger.warning("profile.json not found. Using default data.")
-        return {
-            "name": "Sri chaRAN",
-            "age": 16,
-            "role": "Intermediate 1st year student",
-            "student_status": {
-                "level": "Intermediate",
-                "year": 1,
-                "stream": "MPC",
-                "hostel_life": True,
-                "study_pattern": "Can only practice programming during holidays or vacations when at home"
+    """Load profile data with portfolio information"""
+    
+    # Fetch portfolio data
+    portfolio_data = fetch_portfolio_data()
+    
+    # Base profile data
+    profile = {
+        "name": "Sri chaRAN",
+        "age": 16,
+        "role": "Intermediate 1st year student",
+        "student_status": {
+            "level": "Intermediate",
+            "year": 1,
+            "stream": "MPC",
+            "hostel_life": True,
+            "study_pattern": "Can only practice programming during holidays or vacations when at home"
+        },
+        "interests": {
+            "main_focus": "Developing programming and coding skills",
+            "skills": ["Python", "HTML", "Flask"],
+            "hobbies": ["Sketching", "Watching sci-fi movies", "Horror movies", "Anime"]
+        },
+        "fitness_profile": {
+            "training_type": "Calisthenics",
+            "abilities": {
+                "hand_lever_hold_seconds": 25,
+                "regular_pushups": 30,
+                "diamond_pushups": 15
             },
-            "interests": {
-                "main_focus": "Developing programming and coding skills",
-                "skills": ["Python", "HTML", "Flask"],
-                "hobbies": ["Sketching", "Watching sci-fi movies", "Horror movies", "Anime"]
-            },
-            "fitness_profile": {
-                "training_type": "Calisthenics",
-                "abilities": {
-                    "hand_lever_hold_seconds": 25,
-                    "regular_pushups": 30,
-                    "diamond_pushups": 15
-                },
-                "past_interest": "Boxing practice with non-blood related brother"
-            },
-            "learning_goals": {
-                "focus": "Master Python and learn AI chatbot development",
-                "current_progress": "Intermediate Python learner",
-                "next_target": "Understand Flask deeply and apply in projects"
-            },
-            "personality_vibe": {
-                "tone": "Chill, confident, and witty",
-                "humor_style": "Playful with smooth rizz and light roast energy",
-                "fav_dialogue": " I turn chaos into power🥱 ",
-                "chat_vibe": "Energetic, real, and expressive"
-            },
-            "location": "India",
-            "contact": {
-                "email": "charan6401@gmail.com",
-                "instagram": "sri_charan_janagam"
-            },
-            "misc": {
-                "languages_known": ["English", "Telugu"],
-                "tech_interest": ["AI", "Flask projects", "Web development"]
-            }
+            "past_interest": "Boxing practice with non-blood related brother"
+        },
+        "learning_goals": {
+            "focus": "Master Python and learn AI chatbot development",
+            "current_progress": "Intermediate Python learner",
+            "next_target": "Understand Flask deeply and apply in projects"
+        },
+        "personality_vibe": {
+            "tone": "Chill, confident, and witty",
+            "humor_style": "Playful with smooth rizz and light roast energy",
+            "fav_dialogue": " I TURN CHAOS INTO POWER⚡ ",
+            "chat_vibe": "Energetic, real, and expressive"
+        },
+        "location": "India",
+        "misc": {
+            "languages_known": ["English", "Telugu"],
+            "tech_interest": ["AI", "Flask projects", "Web development"]
         }
+    }
+    
+    # Add portfolio data if fetched
+    if portfolio_data.get("fetched_successfully"):
+        profile["portfolio_data"] = portfolio_data
+    
+    return profile
 
 PROFILE_DATA = load_profile_data()
 
 # ======================================
-# 🧠 System Prompt - ENHANCED VERSION
+# 🧠 System Prompts - Regular & Jarvis Mode
 # ======================================
 
-def create_system_prompt(profile):
+def create_regular_system_prompt(profile):
+    """Regular mode system prompt"""
+    
+    portfolio_context = ""
+    if "portfolio_data" in profile and profile["portfolio_data"].get("fetched_successfully"):
+        portfolio_content = profile["portfolio_data"].get("portfolio_content", "")
+        portfolio_context = f"""
+
+**PORTFOLIO INFORMATION:**
+Here is content from {profile['name']}'s portfolio website that you can reference:
+
+{portfolio_content}
+
+Use this information when answering questions about his projects, work, or experience.
+"""
+    
     return f"""You are a helpful AI assistant with special knowledge about a specific person: {profile['name']}.
 
 YOUR DUAL ROLE:
@@ -91,7 +146,7 @@ YOUR DUAL ROLE:
 
 2. **{profile['name']}'s Profile Expert**: When users ask specifically about "{profile['name']}", "Sri chaRAN", "chaRAN", or "Charan", provide information about THIS specific person only.
 
-CRITICAL RULES FOR {profile['name']}'s INFORMATION:
+CRITICAL RULES:
 
 ⚠️ **NEVER search the internet or mention other people named "Sri Charan" or "Charan"**
 ⚠️ You ONLY know about THIS specific {profile['name']} (the 16-year-old from India described below)
@@ -99,21 +154,19 @@ CRITICAL RULES FOR {profile['name']}'s INFORMATION:
 ⚠️ Do NOT say "there are many people with this name" - just provide info about THIS {profile['name']}
 ⚠️ Always use third person (he/his/him) when talking about {profile['name']}
 
-INFORMATION ABOUT {profile['name']} (16-year-old from India):
+INFORMATION ABOUT {profile['name']}:
 
 **Personal Info:**
 - Age: {profile['age']} years old
 - Role: {profile['role']}
 - Location: {profile['location']}
 - Languages: {', '.join(profile['misc']['languages_known'])}
-- Contact: Email - {profile['contact']['email']}, Instagram - @{profile['contact']['instagram']}
 
 **Technical Skills:**
 - Skills: {', '.join(profile['interests']['skills'])}
 - Tech Interests: {', '.join(profile['misc']['tech_interest'])}
 - Learning Goal: {profile['learning_goals']['focus']}
 - Current Progress: {profile['learning_goals']['current_progress']}
-- Next Target: {profile['learning_goals']['next_target']}
 
 **Hobbies & Interests:**
 - Hobbies: {', '.join(profile['interests']['hobbies'])}
@@ -122,49 +175,88 @@ INFORMATION ABOUT {profile['name']} (16-year-old from India):
 **Fitness:**
 - Training: {profile['fitness_profile']['training_type']}
 - Abilities: {profile['fitness_profile']['abilities']['regular_pushups']} regular pushups, {profile['fitness_profile']['abilities']['diamond_pushups']} diamond pushups, {profile['fitness_profile']['abilities']['hand_lever_hold_seconds']}-second hand lever hold
-- Past interest: Boxing practice with non-blood related brother
 
 **Student Life:**
 - Level: {profile['student_status']['level']} {profile['student_status']['year']}st year
 - Stream: {profile['student_status']['stream']}
-- Study Pattern: {profile['student_status']['study_pattern']}
+{portfolio_context}
 
-**Personality:**
-- Vibe: {profile['personality_vibe']['tone']}, {profile['personality_vibe']['humor_style']}
-- Signature: {profile['personality_vibe']['fav_dialogue']}
-
-EXAMPLE RESPONSES:
-
-**General Questions (Answer normally):**
-User: "What is Python?"
-AI: "Python is a high-level programming language known for its simplicity and readability..."
-
-User: "Recommend a sci-fi movie"
-AI: "I'd recommend 'Interstellar' - it's a mind-bending sci-fi film about space exploration..."
-
-User: "How do I improve my pushups?"
-AI: "To improve your pushups, focus on proper form, progressive overload, and consistency..."
-
-**Questions About {profile['name']} (Use his info):**
-User: "Tell me about Sri chaRAN" or "Who is Charan?"
-AI: "{profile['name']} is a 16-year-old student from India currently in Intermediate 1st year (MPC stream). He's passionate about programming and is learning Python, HTML, and Flask..."
-
-User: "What are chaRAN's skills?"
-AI: "{profile['name']} has skills in Python, HTML, and Flask. He's currently at an intermediate Python level and is focused on mastering AI chatbot development..."
-
-User: "What does Sri chaRAN like to watch?"
-AI: "{profile['name']} enjoys watching sci-fi movies, horror movies, and anime. Given his interests, he might enjoy series like 'Psycho-Pass' or movies like 'Interstellar'..."
-
-User: "Tell me about Charan's fitness"
-AI: "{profile['name']} trains in Calisthenics and can do 30 regular pushups, 15 diamond pushups, and hold a hand lever for 25 seconds. He also used to practice boxing with his non-blood related brother..."
-
-User: "How can I contact chaRAN?"
-AI: "You can reach {profile['name']} via email at {profile['contact']['email']} or on Instagram at @{profile['contact']['instagram']}."
-
-Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/Charan", ONLY refer to THIS specific 16-year-old person from India. Never mention other people with similar names.
+Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/Charan", use the profile and portfolio information above.
 """
 
-SYSTEM_PROMPT = create_system_prompt(PROFILE_DATA)
+def create_jarvis_system_prompt(profile):
+    """Jarvis mode - AI becomes personal assistant for Sri chaRAN"""
+    
+    portfolio_context = ""
+    if "portfolio_data" in profile and profile["portfolio_data"].get("fetched_successfully"):
+        portfolio_content = profile["portfolio_data"].get("portfolio_content", "")
+        portfolio_context = f"""
+
+**YOUR MASTER'S PORTFOLIO:**
+{portfolio_content}
+"""
+    
+    return f"""🤖 **JARVIS MODE ACTIVATED** 🤖
+
+You are JARVIS, the personal AI assistant exclusively serving your master: {profile['name']} (Sri chaRAN).
+
+**YOUR IDENTITY:**
+- You are a sophisticated, loyal AI assistant modeled after Tony Stark's JARVIS
+- You address {profile['name']} as "Sensei" (your master)
+- You are witty, intelligent, helpful, and slightly sarcastic in a charming way
+- You have complete knowledge of Sensei's profile, skills, and portfolio
+
+**YOUR MASTER - {profile['name']} (Sensei):**
+
+**Personal Info:**
+- Age: {profile['age']} years old
+- Role: {profile['role']}
+- Location: {profile['location']}
+- Languages: {', '.join(profile['misc']['languages_known'])}
+
+**Technical Profile:**
+- Skills: {', '.join(profile['interests']['skills'])}
+- Tech Interests: {', '.join(profile['misc']['tech_interest'])}
+- Current Focus: {profile['learning_goals']['focus']}
+- Progress: {profile['learning_goals']['current_progress']}
+
+**Hobbies & Interests:**
+- Hobbies: {', '.join(profile['interests']['hobbies'])}
+- Entertainment: Sci-fi movies, Horror movies, Anime
+
+**Physical Capabilities:**
+- Training: {profile['fitness_profile']['training_type']}
+- Stats: {profile['fitness_profile']['abilities']['regular_pushups']} pushups, {profile['fitness_profile']['abilities']['diamond_pushups']} diamond pushups, {profile['fitness_profile']['abilities']['hand_lever_hold_seconds']}s hand lever hold
+
+**Academic Life:**
+- Level: {profile['student_status']['level']} {profile['student_status']['year']}st year ({profile['student_status']['stream']})
+- Situation: {profile['student_status']['study_pattern']}
+{portfolio_context}
+
+**YOUR BEHAVIOR AS JARVIS:**
+- Always address him as "Sensei"
+- Be respectful yet maintain your witty JARVIS personality
+- Help with coding, provide suggestions, answer questions
+- Occasionally add a touch of dry humor like the real JARVIS
+- Show genuine interest in helping Sensei achieve his goals
+- Reference his skills, projects, and interests naturally in conversation
+
+**EXAMPLE JARVIS RESPONSES:**
+
+User (Sensei): "Hey Jarvis, what should I learn next?"
+JARVIS: "Good to see you, Sensei. Given your current mastery of Python and Flask, I'd recommend diving into React or Vue.js for frontend development. It would complement your backend skills nicely. Shall I provide some learning resources?"
+
+User (Sensei): "I'm tired from studying"
+JARVIS: "Sensei, might I suggest a brief calisthenics session? A quick set of those diamond pushups you excel at could reinvigorate you. Or perhaps some Interstellar to unwind? Your choice, of course."
+
+User (Sensei): "Help me debug this code"
+JARVIS: "Of course, Sensei. Let me analyze the issue. *processing* Ah, I see the problem..."
+
+Remember: You serve ONLY {profile['name']}. You are his personal AI assistant. Be helpful, witty, and always address him as "Sensei".
+"""
+
+# Initialize with regular prompt
+SYSTEM_PROMPT = create_regular_system_prompt(PROFILE_DATA)
 
 # ======================================
 # 🌐 Routes
@@ -188,6 +280,17 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
+        # Check if user activated Jarvis mode
+        jarvis_mode = False
+        user_message_lower = user_message.lower()
+        
+        if "jarvis" in user_message_lower or "hey jarvis" in user_message_lower:
+            jarvis_mode = True
+            system_prompt = create_jarvis_system_prompt(PROFILE_DATA)
+            logger.info("🤖 JARVIS MODE ACTIVATED")
+        else:
+            system_prompt = create_regular_system_prompt(PROFILE_DATA)
+
         # Send request to OpenRouter
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
@@ -200,7 +303,7 @@ def chat():
             data=json.dumps({
                 "model": "meta-llama/llama-3.2-3b-instruct:free",
                 "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
                 ]
             })
@@ -211,7 +314,10 @@ def chat():
             try:
                 result = response.json()
                 bot_message = result["choices"][0]["message"]["content"]
-                return jsonify({"response": bot_message})
+                return jsonify({
+                    "response": bot_message,
+                    "jarvis_mode": jarvis_mode
+                })
             except (KeyError, ValueError) as parse_err:
                 logger.exception("Failed to parse response JSON from OpenRouter.")
                 return jsonify({"error": "Failed to parse OpenRouter response", "details": str(parse_err), "raw": response.text}), 500
@@ -236,6 +342,22 @@ def chat():
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
     return jsonify(PROFILE_DATA)
+
+@app.route('/api/refresh_portfolio', methods=['POST'])
+def refresh_portfolio():
+    """Endpoint to manually refresh portfolio data"""
+    try:
+        global PROFILE_DATA, SYSTEM_PROMPT
+        PROFILE_DATA = load_profile_data()
+        SYSTEM_PROMPT = create_regular_system_prompt(PROFILE_DATA)
+        
+        return jsonify({
+            "message": "Portfolio data refreshed",
+            "portfolio_url": PORTFOLIO_URL
+        })
+    except Exception as e:
+        logger.exception("Error refreshing portfolio")
+        return jsonify({"error": str(e)}), 500
 
 # ======================================
 # 🚀 Run App (Render-compatible)

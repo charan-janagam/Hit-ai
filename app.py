@@ -4,6 +4,7 @@ import os
 import json
 import logging
 import re
+import time
 
 app = Flask(__name__)
 
@@ -20,6 +21,16 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
 PORTFOLIO_URL = "https://janagams-portfolio.onrender.com"
+
+# ======================================
+# 🤖 FREE Model Configuration with Fallbacks
+# ======================================
+
+FREE_MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",      # Best balance - MAIN MODEL
+    "google/gemini-flash-1.5-8b",                  # Fast backup
+    "meta-llama/llama-3.2-3b-instruct:free",      # Last resort
+]
 
 # ======================================
 # 🕷️ Fetch Portfolio Data (Simple Method)
@@ -275,7 +286,6 @@ def chat():
         if not user_message:
             return jsonify({"error": "No message provided"}), 400
 
-        # Sanity check: ensure API key exists
         if not OPENROUTER_API_KEY:
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
@@ -291,50 +301,83 @@ def chat():
         else:
             system_prompt = create_regular_system_prompt(PROFILE_DATA)
 
-        # Send request to OpenRouter
-        response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
-                "X-Title": "Sri chaRAN Personal Chatbot",
-            },
-            data=json.dumps({
-                "model": "meta-llama/llama-3.2-3b-instruct:free",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ]
-            })
-        )
+        # Try multiple free models with retry logic
+        last_error = None
+        
+        for model_index, model in enumerate(FREE_MODELS):
+            max_retries = 2 if model_index == 0 else 1  # More retries for primary model
+            
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Trying model: {model} (attempt {attempt + 1}/{max_retries})")
+                    
+                    # Send request to OpenRouter
+                    response = requests.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                            "Content-Type": "application/json",
+                            "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
+                            "X-Title": "Sri chaRAN Personal Chatbot",
+                        },
+                        data=json.dumps({
+                            "model": model,
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_message}
+                            ]
+                        }),
+                        timeout=30
+                    )
 
-        # Handle responses
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                bot_message = result["choices"][0]["message"]["content"]
-                return jsonify({
-                    "response": bot_message,
-                    "jarvis_mode": jarvis_mode
-                })
-            except (KeyError, ValueError) as parse_err:
-                logger.exception("Failed to parse response JSON from OpenRouter.")
-                return jsonify({"error": "Failed to parse OpenRouter response", "details": str(parse_err), "raw": response.text}), 500
+                    # SUCCESS!
+                    if response.status_code == 200:
+                        result = response.json()
+                        bot_message = result["choices"][0]["message"]["content"]
+                        logger.info(f"✅ Success with model: {model}")
+                        return jsonify({
+                            "response": bot_message,
+                            "jarvis_mode": jarvis_mode,
+                            "model_used": model
+                        })
+                    
+                    # Rate limited - try next attempt or next model
+                    elif response.status_code == 429:
+                        logger.warning(f"⏳ Rate limited on {model}")
+                        last_error = "Rate limited"
+                        if attempt < max_retries - 1:
+                            time.sleep(2)  # Wait 2 seconds before retry
+                            continue
+                        else:
+                            break  # Try next model
+                    
+                    # Other errors
+                    else:
+                        logger.warning(f"❌ Error {response.status_code} with {model}")
+                        last_error = f"Error {response.status_code}"
+                        break  # Try next model
+                        
+                except requests.exceptions.Timeout:
+                    logger.warning(f"⏱️ Timeout with {model}")
+                    last_error = "Timeout"
+                    if attempt < max_retries - 1:
+                        time.sleep(1)
+                        continue
+                    else:
+                        break  # Try next model
+                        
+                except Exception as e:
+                    logger.error(f"❌ Exception with {model}: {str(e)}")
+                    last_error = str(e)
+                    break  # Try next model
+        
+        # All models failed
+        return jsonify({
+            "error": "⏳ All AI models are currently busy. Please try again in a moment!",
+            "rate_limited": True,
+            "last_error": last_error
+        }), 429
 
-        elif response.status_code == 401:
-            logger.error("OpenRouter returned 401 - check your API key.")
-            return jsonify({"error": "OpenRouter authentication failed (401). Check OPENROUTER_API_KEY."}), 500
-        elif response.status_code == 404:
-            logger.error("OpenRouter returned 404 - model or endpoint not found.")
-            return jsonify({"error": "OpenRouter returned 404. Model or endpoint not found. Check the model name.", "raw": response.text}), 500
-        else:
-            logger.error("OpenRouter API error: %s %s", response.status_code, response.text)
-            return jsonify({"error": f"API Error {response.status_code}: {response.text}"}), 500
-
-    except requests.exceptions.Timeout:
-        logger.exception("OpenRouter request timed out.")
-        return jsonify({"error": "Request to OpenRouter timed out. Please try again."}), 500
     except Exception as e:
         logger.exception("Unhandled exception in /api/chat")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500

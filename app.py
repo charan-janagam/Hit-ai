@@ -62,7 +62,7 @@ def load_profile_data():
             "personality_vibe": {
                 "tone": "Chill, confident, and witty",
                 "humor_style": "Playful with smooth rizz and light roast energy",
-                "fav_dialogue": "⚡ It's all about Sri chaRAN",
+                "fav_dialogue": " I turn chaos into power🥱 ",
                 "chat_vibe": "Energetic, real, and expressive"
             },
             "location": "India",
@@ -188,7 +188,7 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
-        # Send request to OpenRouter with updated format
+        # Send request to OpenRouter
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -198,7 +198,7 @@ def chat():
                 "X-Title": "Sri chaRAN Personal Chatbot",
             },
             data=json.dumps({
-                "model": "meta-llama/llama-3.3-70b-instruct:free",
+                "model": "meta-llama/llama-3.2-3b-instruct:free",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_message}
@@ -240,3 +240,7 @@ def get_profile():
 # ======================================
 # 🚀 Run App (Render-compatible)
 # ======================================
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

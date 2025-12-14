@@ -1,5 +1,5 @@
-# app.py - 429-PROOF VERSION 🔥
-from flask import Flask, render_template, request, jsonify
+# app.py - 429-PROOF + STREAMING + FIXED CONTEXT 🔥
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 import requests
 import os
 import json
@@ -23,10 +23,10 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 PORTFOLIO_URL = os.getenv("PORTFOLIO_URL", "https://janagams-portfolio.onrender.com")
 
 # ======================================
-# 🔥 429-PROOF MODEL HANDLER
+# 🔥 429-PROOF MODEL HANDLER WITH STREAMING
 # ======================================
 class ThrottleProofHandler:
-    """Eliminates 429 errors with rotation + delays + memory trimming"""
+    """Eliminates 429 errors with rotation + delays + memory trimming + STREAMING"""
     
     def __init__(self):
         # FREE models with separate rate limits
@@ -78,10 +78,10 @@ class ThrottleProofHandler:
         logger.info(f"📊 Trimmed messages: {len(messages)} → {len(system_msgs) + len(trimmed)}")
         return system_msgs + trimmed
     
-    def send_request(self, messages, timeout=25):
+    def send_request_streaming(self, messages, timeout=30):
         """
-        Send request with FULL 429 protection
-        Returns: (success, response_data, model_used)
+        Send STREAMING request with FULL 429 protection
+        Yields: (chunk_text, is_complete, model_used, error)
         """
         # Trim memory to reduce token usage
         messages = self._trim_messages(messages)
@@ -92,7 +92,7 @@ class ThrottleProofHandler:
                 self._wait_if_needed()
                 
                 current_model = self.models[self.current_model_idx]
-                logger.info(f"🤖 Trying: {current_model} (attempt {attempt + 1}/{self.max_retries})")
+                logger.info(f"🤖 Streaming with: {current_model} (attempt {attempt + 1}/{self.max_retries})")
                 
                 response = requests.post(
                     url="https://openrouter.ai/api/v1/chat/completions",
@@ -104,24 +104,58 @@ class ThrottleProofHandler:
                     },
                     data=json.dumps({
                         "model": current_model,
-                        "messages": messages
+                        "messages": messages,
+                        "stream": True  # 🔥 STREAMING ENABLED
                     }),
-                    timeout=timeout
+                    timeout=timeout,
+                    stream=True  # Important for streaming
                 )
                 
                 # Handle 429 with rotation
                 if response.status_code == 429:
                     logger.warning(f"⚠️  429 on {current_model}, rotating...")
+                    yield ("", False, None, "rate_limited")
                     self._rotate_model()
-                    time.sleep(3)  # Extra delay after 429
+                    time.sleep(3)
                     continue
                 
-                # Handle success
+                # Handle success - stream the response
                 if response.status_code == 200:
-                    result = response.json()
-                    bot_message = result["choices"][0]["message"]["content"]
-                    logger.info(f"✅ Success with {current_model}")
-                    return True, bot_message, current_model
+                    logger.info(f"✅ Streaming started with {current_model}")
+                    
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            
+                            # Skip empty lines
+                            if not line.strip():
+                                continue
+                            
+                            # Parse SSE format
+                            if line.startswith('data: '):
+                                data = line[6:]  # Remove 'data: ' prefix
+                                
+                                # Check for stream end
+                                if data.strip() == '[DONE]':
+                                    yield ("", True, current_model, None)
+                                    return
+                                
+                                try:
+                                    chunk = json.loads(data)
+                                    content = chunk['choices'][0]['delta'].get('content', '')
+                                    
+                                    if content:
+                                        # Yield each chunk as it arrives
+                                        yield (content, False, current_model, None)
+                                        
+                                except json.JSONDecodeError:
+                                    continue
+                                except (KeyError, IndexError):
+                                    continue
+                    
+                    # Stream completed
+                    yield ("", True, current_model, None)
+                    return
                 
                 # Other errors - try next model
                 logger.warning(f"❌ Error {response.status_code} with {current_model}")
@@ -139,7 +173,7 @@ class ThrottleProofHandler:
                 time.sleep(1)
         
         # All retries failed
-        return False, None, None
+        yield ("", True, None, "all_failed")
 
 # Initialize handler
 ai_handler = ThrottleProofHandler()
@@ -227,7 +261,7 @@ def load_profile_data():
     return profile
 
 # ======================================
-# 🧠 System Prompts
+# 🧠 System Prompts - FIXED CONTEXT
 # ======================================
 def create_regular_system_prompt(profile):
     portfolio_context = ""
@@ -236,31 +270,42 @@ def create_regular_system_prompt(profile):
         portfolio_context = f"""
 
 **PORTFOLIO INFORMATION:**
-Here is content from {profile['name']}'s portfolio website that you can reference:
+Here is content from {profile['name']}'s portfolio website that you can reference when asked about him:
 
 {portfolio_content}
 
 Use this information when answering questions about his projects, work, or experience.
 """
-    return f"""You are a helpful AI assistant with special knowledge about a specific person: {profile['name']}.
+    return f"""You are an AI assistant that helps people learn about {profile['name']} and answers general questions.
 
-YOUR DUAL ROLE:
+**IMPORTANT CONTEXT UNDERSTANDING:**
 
-1. **General Assistant**: Answer any general questions (math, science, coding help, recommendations, etc.) normally like a regular AI assistant.
+When users ask about "me", "I", "my", or similar first-person references:
+- They are asking about THEMSELVES (the person chatting with you)
+- NOT about {profile['name']}
 
-2. **{profile['name']}'s Profile Expert**: When users ask specifically about "{profile['name']}", "Sri chaRAN", "chaRAN", or "Charan", provide information about THIS specific person only.
+When users ask about "{profile['name']}", "Sri chaRAN", "chaRAN", "Charan", "him", "his":
+- They are asking about {profile['name']} specifically
+- Use the profile information below to answer
 
-CRITICAL RULES:
+**YOUR DUAL ROLE:**
 
-⚠️ **NEVER search the internet or mention other people named "Sri Charan" or "Charan"**
-⚠️ You ONLY know about THIS specific {profile['name']} (the 16-year-old from India described below)
-⚠️ If asked about "Sri Charan" or "Charan", ALWAYS assume they mean THIS person, not anyone else
-⚠️ Do NOT say "there are many people with this name" - just provide info about THIS {profile['name']}
+1. **General Assistant**: Answer any general questions (math, science, coding help, recommendations, etc.) normally.
+
+2. **{profile['name']}'s Profile Expert**: When asked specifically about {profile['name']}, provide information about THIS specific 16-year-old from India.
+
+**CRITICAL RULES:**
+
+⚠️ When someone says "me" or "I" → Ask them about themselves, DO NOT assume they're {profile['name']}
+⚠️ When someone says "{profile['name']}" or "Charan" → Use the profile below
+⚠️ NEVER search the internet or mention other people with similar names
 ⚠️ Always use third person (he/his/him) when talking about {profile['name']}
+⚠️ Do NOT say "there are many people with this name" - just provide info about THIS {profile['name']}
 
-INFORMATION ABOUT {profile['name']}:
+**INFORMATION ABOUT {profile['name']}:**
 
 **Personal Info:**
+- Name: {profile['name']}
 - Age: {profile['age']} years old
 - Role: {profile['role']}
 - Location: {profile['location']}
@@ -283,9 +328,11 @@ INFORMATION ABOUT {profile['name']}:
 **Student Life:**
 - Level: {profile['student_status']['level']} {profile['student_status']['year']}st year
 - Stream: {profile['student_status']['stream']}
+- Living: Hostel life
+- Study pattern: {profile['student_status']['study_pattern']}
 {portfolio_context}
 
-Remember: Be helpful for ALL questions, but when asked about "Sri chaRAN/chaRAN/Charan", use the profile and portfolio information above.
+Remember: Be helpful for ALL questions. When asked about {profile['name']}, use the profile above. When someone asks about themselves, engage with them naturally.
 """
 
 def create_jarvis_system_prompt(profile):
@@ -369,8 +416,9 @@ def get_profile_data(force_refresh=False):
 def home():
     return render_template('index.html')
 
-@app.route('/api/chat', methods=['POST'])
-def chat():
+@app.route('/api/chat/stream', methods=['POST'])
+def chat_stream():
+    """🔥 STREAMING ENDPOINT - ChatGPT-style typing"""
     try:
         data = request.get_json()
         user_message = data.get("message", "").strip() if data else ""
@@ -399,47 +447,39 @@ def chat():
             {"role": "user", "content": user_message}
         ]
 
-        # 🔥 USE 429-PROOF HANDLER
-        success, bot_message, model_used = ai_handler.send_request(messages)
+        # 🔥 STREAMING RESPONSE GENERATOR
+        def generate():
+            full_response = ""
+            model_used = None
+            
+            for chunk_text, is_complete, model, error in ai_handler.send_request_streaming(messages):
+                if error == "rate_limited":
+                    continue  # Rotation happening, keep going
+                
+                if error == "all_failed":
+                    yield f"data: {json.dumps({'error': 'All models busy', 'done': True})}\n\n"
+                    return
+                
+                if chunk_text:
+                    full_response += chunk_text
+                    model_used = model
+                    # Send chunk to frontend
+                    yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                
+                if is_complete:
+                    # Send completion signal with metadata
+                    yield f"data: {json.dumps({'done': True, 'jarvis_mode': jarvis_mode, 'model_used': model_used})}\n\n"
+                    return
 
-        if success:
-            return jsonify({
-                "response": bot_message,
-                "jarvis_mode": jarvis_mode,
-                "model_used": model_used
-            })
-        else:
-            # All models failed
-            return jsonify({
-                "error": "⏳ All AI models are currently busy. Please try again in a moment!",
-                "rate_limited": True
-            }), 429
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
 
     except Exception as e:
-        logger.exception("Unhandled exception in /api/chat")
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
-
-@app.route('/api/profile', methods=['GET'])
-def get_profile():
-    return jsonify(get_profile_data())
-
-@app.route('/api/refresh_portfolio', methods=['POST'])
-def refresh_portfolio():
-    try:
-        PROFILE = get_profile_data(force_refresh=True)
-        return jsonify({
-            "message": "Portfolio data refreshed",
-            "portfolio_url": PORTFOLIO_URL
-        })
-    except Exception as e:
-        logger.exception("Error refreshing portfolio")
-        return jsonify({"error": str(e)}), 500
-
-# ======================================
-# 🚀 Run App (Render-compatible)
-# ======================================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    logger.info("🔥 Starting 429-PROOF chatbot server...")
-    logger.info(f"📊 Models: {ai_handler.models}")
-    app.run(host="0.0.0.0", port=port)
+        logger.exception("Unhandled exception in /api/chat/stream")
+        return jsonify({"error": "Internal serve

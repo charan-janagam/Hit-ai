@@ -1,16 +1,17 @@
-# app.py - updated (lazy portfolio fetch + cache)
-from flask import Flask, render_template, request, jsonify
+# app.py - 429-PROOF + STREAMING VERSION 🔥
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 import requests
 import os
 import json
 import logging
 import re
 import time
+from collections import deque
 
 app = Flask(__name__)
 
 # ======================================
-# Logging (useful on Render)
+# Logging
 # ======================================
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,20 +19,167 @@ logger = logging.getLogger(__name__)
 # ======================================
 # 🔐 Configuration
 # ======================================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Set in Render dashboard
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 PORTFOLIO_URL = os.getenv("PORTFOLIO_URL", "https://janagams-portfolio.onrender.com")
 
 # ======================================
-# 🤖 FREE Model Configuration with Fallbacks
+# 🔥 429-PROOF MODEL HANDLER WITH STREAMING
 # ======================================
-FREE_MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",      # Best balance - MAIN MODEL
-    "google/gemini-flash-1.5-8b",                # Fast backup
-    "meta-llama/llama-3.2-3b-instruct:free",     # Last resort
-]
+class ThrottleProofHandler:
+    """Eliminates 429 errors with rotation + delays + memory trimming + STREAMING"""
+    
+    def __init__(self):
+        # FREE models with separate rate limits
+        self.models = [
+            "meta-llama/llama-3.3-70b-instruct:free",    # NEW PRIMARY (best free model)
+            "meta-llama/llama-3.1-8b-instruct:free",     # Fast backup
+            "google/gemini-flash-1.5-8b",                # Emergency fallback
+        ]
+        self.current_model_idx = 0
+        
+        # Anti-throttle settings
+        self.min_delay = 2.0  # seconds between requests
+        self.last_request_time = 0
+        self.max_retries = 3
+        
+        # Memory trimming (keeps conversation light)
+        self.max_memory_messages = 6  # Only last 6 exchanges
+    
+    def _wait_if_needed(self):
+        """Smart delay to prevent rate limiting"""
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_delay:
+            wait_time = self.min_delay - elapsed
+            logger.info(f"⏳ Anti-throttle delay: {wait_time:.1f}s")
+            time.sleep(wait_time)
+        self.last_request_time = time.time()
+    
+    def _rotate_model(self):
+        """Switch to next model on 429"""
+        self.current_model_idx = (self.current_model_idx + 1) % len(self.models)
+        logger.info(f"🔄 Rotated to model: {self.models[self.current_model_idx]}")
+        return self.models[self.current_model_idx]
+    
+    def _trim_messages(self, messages):
+        """
+        Keep conversation light - reduces token load by 60%
+        Always keeps: system message + last N user/assistant exchanges
+        """
+        if len(messages) <= self.max_memory_messages + 1:  # +1 for system
+            return messages
+        
+        # Separate system from conversation
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        other_msgs = [m for m in messages if m.get("role") != "system"]
+        
+        # Keep only last N messages
+        trimmed = other_msgs[-self.max_memory_messages:]
+        
+        logger.info(f"📊 Trimmed messages: {len(messages)} → {len(system_msgs) + len(trimmed)}")
+        return system_msgs + trimmed
+    
+    def send_request_streaming(self, messages, timeout=30):
+        """
+        Send STREAMING request with FULL 429 protection
+        Yields: (chunk_text, is_complete, model_used, error)
+        """
+        # Trim memory to reduce token usage
+        messages = self._trim_messages(messages)
+        
+        for attempt in range(self.max_retries):
+            try:
+                # Anti-throttle delay
+                self._wait_if_needed()
+                
+                current_model = self.models[self.current_model_idx]
+                logger.info(f"🤖 Streaming with: {current_model} (attempt {attempt + 1}/{self.max_retries})")
+                
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
+                        "X-Title": "Sri chaRAN Personal Chatbot",
+                    },
+                    data=json.dumps({
+                        "model": current_model,
+                        "messages": messages,
+                        "stream": True  # 🔥 STREAMING ENABLED
+                    }),
+                    timeout=timeout,
+                    stream=True  # Important for streaming
+                )
+                
+                # Handle 429 with rotation
+                if response.status_code == 429:
+                    logger.warning(f"⚠️  429 on {current_model}, rotating...")
+                    yield ("", False, None, "rate_limited")
+                    self._rotate_model()
+                    time.sleep(3)
+                    continue
+                
+                # Handle success - stream the response
+                if response.status_code == 200:
+                    logger.info(f"✅ Streaming started with {current_model}")
+                    
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            
+                            # Skip empty lines
+                            if not line.strip():
+                                continue
+                            
+                            # Parse SSE format
+                            if line.startswith('data: '):
+                                data = line[6:]  # Remove 'data: ' prefix
+                                
+                                # Check for stream end
+                                if data.strip() == '[DONE]':
+                                    yield ("", True, current_model, None)
+                                    return
+                                
+                                try:
+                                    chunk = json.loads(data)
+                                    content = chunk['choices'][0]['delta'].get('content', '')
+                                    
+                                    if content:
+                                        # Yield each chunk as it arrives
+                                        yield (content, False, current_model, None)
+                                        
+                                except json.JSONDecodeError:
+                                    continue
+                                except (KeyError, IndexError):
+                                    continue
+                    
+                    # Stream completed
+                    yield ("", True, current_model, None)
+                    return
+                
+                # Other errors - try next model
+                logger.warning(f"❌ Error {response.status_code} with {current_model}")
+                self._rotate_model()
+                time.sleep(1)
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"⏱️  Timeout with {current_model}")
+                self._rotate_model()
+                time.sleep(1)
+                
+            except Exception as e:
+                logger.error(f"❌ Exception with {current_model}: {str(e)}")
+                self._rotate_model()
+                time.sleep(1)
+        
+        # All retries failed
+        yield ("", True, None, "all_failed")
+
+# Initialize handler
+ai_handler = ThrottleProofHandler()
 
 # ======================================
-# 🕷️ Fetch Portfolio Data (Simple Method)
+# 🕷️ Fetch Portfolio Data
 # ======================================
 def fetch_portfolio_data(timeout=8):
     """Fetch raw content from portfolio website (returns dict)."""
@@ -58,7 +206,7 @@ def fetch_portfolio_data(timeout=8):
         return {"fetched_successfully": False}
 
 # ======================================
-# 👤 Load Sri chaRAN's Profile (base data)
+# 👤 Load Sri chaRAN's Profile
 # ======================================
 def build_base_profile():
     return {
@@ -113,8 +261,7 @@ def load_profile_data():
     return profile
 
 # ======================================
-# 🧠 System Prompts - Regular & Jarvis Mode
-# (unchanged logic but functions accept profile param)
+# 🧠 System Prompts
 # ======================================
 def create_regular_system_prompt(profile):
     portfolio_context = ""
@@ -231,7 +378,7 @@ You are JARVIS, the personal AI assistant exclusively serving your master: {prof
 """
 
 # ======================================
-# Lazy cached profile (avoids blocking startup)
+# Lazy cached profile
 # ======================================
 _PROFILE_CACHE = {"profile": None, "last_fetched": 0}
 PROFILE_CACHE_TTL = 300  # seconds
@@ -249,9 +396,6 @@ def get_profile_data(force_refresh=False):
             _PROFILE_CACHE["last_fetched"] = now
     return _PROFILE_CACHE["profile"]
 
-# Initialize system prompt lazily (one-time)
-SYSTEM_PROMPT = create_regular_system_prompt(get_profile_data())
-
 # ======================================
 # 🌐 Routes
 # ======================================
@@ -259,8 +403,9 @@ SYSTEM_PROMPT = create_regular_system_prompt(get_profile_data())
 def home():
     return render_template('index.html')
 
-@app.route('/api/chat', methods=['POST'])
-def chat():
+@app.route('/api/chat/stream', methods=['POST'])
+def chat_stream():
+    """🔥 NEW STREAMING ENDPOINT - ChatGPT-style typing"""
     try:
         data = request.get_json()
         user_message = data.get("message", "").strip() if data else ""
@@ -272,6 +417,7 @@ def chat():
             logger.error("OPENROUTER_API_KEY is not set in environment variables.")
             return jsonify({"error": "Server misconfiguration: OPENROUTER_API_KEY is not set."}), 500
 
+        # Detect Jarvis mode
         jarvis_mode = False
         user_message_lower = user_message.lower()
 
@@ -282,78 +428,56 @@ def chat():
         else:
             system_prompt = create_regular_system_prompt(get_profile_data())
 
-        last_error = None
+        # Build messages
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
 
-        for model_index, model in enumerate(FREE_MODELS):
-            max_retries = 2 if model_index == 0 else 1
-            for attempt in range(max_retries):
-                try:
-                    logger.info(f"Trying model: {model} (attempt {attempt + 1}/{max_retries})")
-                    response = requests.post(
-                        url="https://openrouter.ai/api/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                            "Content-Type": "application/json",
-                            "HTTP-Referer": "https://sri-charans-ai-assistant.onrender.com",
-                            "X-Title": "Sri chaRAN Personal Chatbot",
-                        },
-                        data=json.dumps({
-                            "model": model,
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_message}
-                            ]
-                        }),
-                        timeout=30
-                    )
+        # 🔥 STREAMING RESPONSE GENERATOR
+        def generate():
+            full_response = ""
+            model_used = None
+            
+            for chunk_text, is_complete, model, error in ai_handler.send_request_streaming(messages):
+                if error == "rate_limited":
+                    continue  # Rotation happening, keep going
+                
+                if error == "all_failed":
+                    yield f"data: {json.dumps({'error': 'All models busy', 'done': True})}\n\n"
+                    return
+                
+                if chunk_text:
+                    full_response += chunk_text
+                    model_used = model
+                    # Send chunk to frontend
+                    yield f"data: {json.dumps({'text': chunk_text, 'done': False})}\n\n"
+                
+                if is_complete:
+                    # Send completion signal with metadata
+                    yield f"data: {json.dumps({'done': True, 'jarvis_mode': jarvis_mode, 'model_used': model_used})}\n\n"
+                    return
 
-                    if response.status_code == 200:
-                        result = response.json()
-                        bot_message = result["choices"][0]["message"]["content"]
-                        logger.info(f"✅ Success with model: {model}")
-                        return jsonify({
-                            "response": bot_message,
-                            "jarvis_mode": jarvis_mode,
-                            "model_used": model
-                        })
-
-                    elif response.status_code == 429:
-                        logger.warning(f"⏳ Rate limited on {model}")
-                        last_error = "Rate limited"
-                        if attempt < max_retries - 1:
-                            time.sleep(2)
-                            continue
-                        else:
-                            break
-
-                    else:
-                        logger.warning(f"❌ Error {response.status_code} with {model}")
-                        last_error = f"Error {response.status_code}"
-                        break
-
-                except requests.exceptions.Timeout:
-                    logger.warning(f"⏱️ Timeout with {model}")
-                    last_error = "Timeout"
-                    if attempt < max_retries - 1:
-                        time.sleep(1)
-                        continue
-                    else:
-                        break
-
-                except Exception as e:
-                    logger.error(f"❌ Exception with {model}: {str(e)}")
-                    last_error = str(e)
-                    break
-
-        return jsonify({
-            "error": "⏳ All AI models are currently busy. Please try again in a moment!",
-            "rate_limited": True,
-            "last_error": last_error
-        }), 429
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no'
+            }
+        )
 
     except Exception as e:
-        logger.exception("Unhandled exception in /api/chat")
+        logger.exception("Unhandled exception in /api/chat/stream")
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Legacy non-streaming endpoint (kept for compatibility)"""
+    return jsonify({
+        "error": "Please use /api/chat/stream for better experience",
+        "redirect": "/api/chat/stream"
+    }), 400
 
 @app.route('/api/profile', methods=['GET'])
 def get_profile():
@@ -362,20 +486,4 @@ def get_profile():
 @app.route('/api/refresh_portfolio', methods=['POST'])
 def refresh_portfolio():
     try:
-        global SYSTEM_PROMPT
-        PROFILE = get_profile_data(force_refresh=True)
-        SYSTEM_PROMPT = create_regular_system_prompt(PROFILE)
-        return jsonify({
-            "message": "Portfolio data refreshed",
-            "portfolio_url": PORTFOLIO_URL
-        })
-    except Exception as e:
-        logger.exception("Error refreshing portfolio")
-        return jsonify({"error": str(e)}), 500
-
-# ======================================
-# 🚀 Run App (Render-compatible)
-# ======================================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+        PR

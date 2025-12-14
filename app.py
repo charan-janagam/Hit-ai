@@ -482,4 +482,4 @@ def chat_stream():
 
     except Exception as e:
         logger.exception("Unhandled exception in /api/chat/stream")
-        return jsonify({"error": "Internal serve
+        return jsonify({"error": "Internal server error", "details": str(e)}), 500

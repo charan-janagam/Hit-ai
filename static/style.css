@@ -94,6 +94,7 @@ body {
 .message {
     display: flex;
     animation: fadeIn 0.3s ease;
+    transition: all 0.3s ease;
 }
 
 @keyframes fadeIn {
@@ -121,6 +122,7 @@ body {
     border-radius: 16px;
     line-height: 1.5;
     font-size: 15px;
+    transition: all 0.2s ease;
 }
 
 .bot-message .message-content {
@@ -133,6 +135,38 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: #ffffff;
     border-bottom-right-radius: 4px;
+}
+
+/* 🔥 STREAMING EFFECT - Blinking cursor while typing */
+.streaming-text::after {
+    content: '▋';
+    animation: blink 0.8s step-end infinite;
+    margin-left: 2px;
+    color: #667eea;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
+/* 🤖 JARVIS MODE styling */
+.jarvis-mode {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+}
+
+.jarvis-mode .message-content {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border-left: 4px solid #00d4ff !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+}
+
+/* ❌ ERROR MESSAGE styling */
+.error-message {
+    background-color: #3d1f1f !important;
+    border-left: 4px solid #ef4444 !important;
+    color: #fca5a5 !important;
 }
 
 .typing-indicator {

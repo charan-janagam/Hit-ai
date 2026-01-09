@@ -1,3 +1,7 @@
+// ================= CONFIG =================
+const API_BASE_URL = 'https://YOUR-BACKEND.onrender.com';
+// =========================================
+
 // Get DOM elements
 const messageInput = document.getElementById('messageInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -7,177 +11,140 @@ const typingIndicator = document.getElementById('typingIndicator');
 // 🔥 STREAMING Send message function (ChatGPT-style typing)
 async function sendMessage() {
     const message = messageInput.value.trim();
-    
     if (!message) return;
-    
-    // Add user message to chat
+
+    // Add user message
     addMessage(message, 'user');
-    
-    // Clear input
     messageInput.value = '';
-    
-    // Disable send button and show typing indicator
+
     sendBtn.disabled = true;
     typingIndicator.classList.add('active');
-    
-    // Create bot message container for streaming
+
+    // Create bot message container
     const botMessageDiv = document.createElement('div');
     botMessageDiv.className = 'message bot-message';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content streaming-text';
-    
+
     botMessageDiv.appendChild(contentDiv);
     messagesContainer.appendChild(botMessageDiv);
-    
-    // Scroll to show the new message
+
     messagesContainer.scrollTo({
         top: messagesContainer.scrollHeight,
         behavior: 'smooth'
     });
-    
+
     try {
-        // 🔥 STREAMING REQUEST
-        const response = await fetch('/api/chat/stream', {
+        // ✅ FIXED: absolute backend URL
+        const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: message })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
         });
-        
+
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            throw new Error('Network error');
         }
-        
-        // Hide typing indicator once streaming starts
+
         typingIndicator.classList.remove('active');
-        
-        // Read the stream
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullText = '';
-        
+
         while (true) {
             const { value, done } = await reader.read();
-            
             if (done) break;
-            
-            // Decode the chunk
+
             const chunk = decoder.decode(value);
-            
-            // Split by newlines (SSE format)
             const lines = chunk.split('\n');
-            
+
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.slice(6));
-                        
-                        if (data.text) {
-                            // Append text word-by-word (streaming effect)
-                            fullText += data.text;
-                            
-                            // Format and display
-                            contentDiv.innerHTML = formatMessage(fullText);
-                            
-                            // Auto-scroll as text appears
-                            messagesContainer.scrollTo({
-                                top: messagesContainer.scrollHeight,
-                                behavior: 'smooth'
-                            });
+                    const payload = line.slice(6);
+                    if (!payload) continue;
+
+                    const data = JSON.parse(payload);
+
+                    if (data.text) {
+                        fullText += data.text;
+                        contentDiv.innerHTML = formatMessage(fullText);
+                        messagesContainer.scrollTo({
+                            top: messagesContainer.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }
+
+                    if (data.done) {
+                        contentDiv.classList.remove('streaming-text');
+                        if (data.jarvis_mode) {
+                            botMessageDiv.classList.add('jarvis-mode');
                         }
-                        
-                        if (data.done) {
-                            // Streaming complete - remove cursor
-                            contentDiv.classList.remove('streaming-text');
-                            
-                            // Add Jarvis styling if in Jarvis mode
-                            if (data.jarvis_mode) {
-                                botMessageDiv.classList.add('jarvis-mode');
-                            }
-                            
-                            // Log model used (optional)
-                            console.log('✅ Model used:', data.model_used);
-                            
-                            break;
-                        }
-                        
-                        if (data.error) {
-                            contentDiv.innerHTML = '⚠️ ' + data.error;
-                            contentDiv.classList.remove('streaming-text');
-                            contentDiv.classList.add('error-message');
-                            break;
-                        }
-                    } catch (e) {
-                        // Skip invalid JSON
-                        continue;
+                        console.log('Model:', data.model_used);
+                    }
+
+                    if (data.error) {
+                        contentDiv.innerHTML = '⚠️ ' + data.error;
+                        contentDiv.classList.add('error-message');
+                        contentDiv.classList.remove('streaming-text');
                     }
                 }
             }
         }
-        
-    } catch (error) {
+
+    } catch (err) {
         typingIndicator.classList.remove('active');
-        contentDiv.innerHTML = '❌ Error: Unable to connect to the server. Please try again.';
-        contentDiv.classList.remove('streaming-text');
+        contentDiv.innerHTML = '❌ Server connection failed';
         contentDiv.classList.add('error-message');
-        console.error('Error:', error);
+        contentDiv.classList.remove('streaming-text');
+        console.error(err);
     }
-    
-    // Re-enable send button
+
     sendBtn.disabled = false;
     messageInput.focus();
 }
 
-// Add message to chat (for user messages)
+// Add message
 function addMessage(text, type) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${type}-message`;
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    
-    // Handle markdown-style formatting
-    const formattedText = formatMessage(text);
-    contentDiv.innerHTML = formattedText;
-    
-    messageDiv.appendChild(contentDiv);
-    messagesContainer.appendChild(messageDiv);
-    
-    // Scroll to bottom smoothly
+    const msg = document.createElement('div');
+    msg.className = `message ${type}-message`;
+
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    content.innerHTML = formatMessage(text);
+
+    msg.appendChild(content);
+    messagesContainer.appendChild(msg);
+
     messagesContainer.scrollTo({
         top: messagesContainer.scrollHeight,
         behavior: 'smooth'
     });
 }
 
-// Basic formatting for messages
+// Format text
 function formatMessage(text) {
-    // Convert **bold** to <strong>
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    // Convert newlines to <br>
-    text = text.replace(/\n/g, '<br>');
-    
-    return text;
+    return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
 }
 
-// Send prompt from suggested buttons
+// Quick prompts
 function sendPrompt(promptText) {
     messageInput.value = promptText;
     sendMessage();
 }
 
-// Handle Enter key press
-messageInput.addEventListener('keypress', function(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
+// Enter key handler
+messageInput.addEventListener('keypress', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
         sendMessage();
     }
 });
 
-// Focus input on page load
-window.addEventListener('load', function() {
+// Auto focus
+window.addEventListener('load', () => {
     messageInput.focus();
 });

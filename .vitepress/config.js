@@ -1,7 +1,8 @@
-import { defineConfig } from 'vitepress'
-
-export default defineConfig({
-  title: 'CharanBot',
-  description: 'CharanBot AI Assistant',
-  base: '/'
-})
+{
+  "scripts": {
+    "build": "vitepress build"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

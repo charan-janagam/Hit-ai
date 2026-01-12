@@ -1,67 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sri chaRAN - AI Assistant</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="UTF-8">
+  <title>JARVIS // Sensei Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <div class="chat-box">
-            <div class="chat-header">
-                <div class="header-content">
-                    <h1>💬 Sri chaRAN's AI Assistant</h1>
-                    <p>Powered by DeepSeek v3.1</p>
-                </div>
-            </div>
 
-            <div class="suggested-prompts">
-                <button class="prompt-btn" onclick="sendPrompt('Tell me about chaRAN⚡ skills and projects')">
-                    💻 sri charan's Skills
-                </button>
-                <button class="prompt-btn" onclick="sendPrompt('Suggest a Python or Flask project idea')">
-                    🚀 Project Ideas
-                </button>
-                <button class="prompt-btn" onclick="sendPrompt('What should I learn next?')">
-                    📚 Learning Path
-                </button>
-                <button class="prompt-btn" onclick="sendPrompt('Create a calisthenics workout routine')">
-                    💪 Workout
-                </button>
-                <button class="prompt-btn" onclick="sendPrompt('Recommend a sci-fi movie or anime series')">
-                    🎬 Entertainment
-                </button>
-            </div>
+<div class="terminal">
 
-            <div class="messages-container" id="messagesContainer">
-                <div class="message bot-message">
-                    <div class="message-content">
-                        <p>Hey there! 👋 I'm your personal AI assistant. I know all about your skills, interests, and goals. Ask me anything!</p>
-                    </div>
-                </div>
-            </div>
+  <header class="header">
+    <h1>JARVIS<span>//AI</span></h1>
+    <p>Personal Hacker Assistant · Sensei</p>
+  </header>
 
-            <div class="typing-indicator" id="typingIndicator">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
+  <!-- Auto prompts -->
+  <div class="prompts">
+    <button onclick="sendPrompt('Who are you?')">WHO ARE YOU</button>
+    <button onclick="sendPrompt('Show my projects')">MY PROJECTS</button>
+    <button onclick="sendPrompt('What skills do I have?')">MY SKILLS</button>
+    <button onclick="sendPrompt('How did you build this AI?')">ABOUT THIS AI</button>
+  </div>
 
-            <div class="input-area">
-                <input 
-                    type="text" 
-                    id="messageInput" 
-                    placeholder="Type your message here..." 
-                    autocomplete="off"
-                >
-                <button id="sendBtn" onclick="sendMessage()">
-                    <span>Send</span>
-                </button>
-            </div>
-        </div>
+  <main id="messagesContainer" class="messages">
+    <div class="message bot-message">
+      <div class="message-content">
+        🟢 JARVIS ONLINE.<br>
+        Awaiting your command, Sensei.
+      </div>
     </div>
+  </main>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <div id="typingIndicator" class="typing-indicator">
+    <span></span><span></span><span></span>
+  </div>
+
+  <footer class="input-area">
+    <input id="messageInput" placeholder="Enter command…" />
+    <button id="sendBtn">EXECUTE</button>
+  </footer>
+
+</div>
+
+<script src="/static/script.js"></script>
 </body>
-</html>
+    </html>

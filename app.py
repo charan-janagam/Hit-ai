@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, Response, stream_with_context
+from flask import Flask, request, jsonify, Response, stream_with_context, render_template
 from flask_cors import CORS
 import requests, os, json, time, re
 
@@ -12,84 +12,50 @@ MODEL = "meta-llama/llama-3.1-8b-instruct:free"
 PORTFOLIO_URL = "https://janagams-portfolio.onrender.com"
 
 # ===============================
-# 🔹 Portfolio Cache (important)
+# Portfolio cache
 # ===============================
-PORTFOLIO_CACHE = {
-    "content": "",
-    "last_fetch": 0
-}
-CACHE_TTL = 600  # 10 minutes
+CACHE = {"text": "", "time": 0}
+TTL = 600
 
-
-def fetch_portfolio_content():
-    """Fetch & clean portfolio text (cached)"""
+def get_portfolio_text():
     now = time.time()
-    if now - PORTFOLIO_CACHE["last_fetch"] < CACHE_TTL:
-        return PORTFOLIO_CACHE["content"]
+    if now - CACHE["time"] < TTL:
+        return CACHE["text"]
 
     try:
-        res = requests.get(PORTFOLIO_URL, timeout=10)
-        if res.status_code == 200:
-            text = res.text
-            # Remove HTML tags
-            clean = re.sub(r"<[^>]+>", " ", text)
-            clean = " ".join(clean.split())
-            clean = clean[:3500]  # keep tokens safe
+        r = requests.get(PORTFOLIO_URL, timeout=10)
+        clean = re.sub(r"<[^>]+>", " ", r.text)
+        clean = " ".join(clean.split())[:3000]
+        CACHE["text"] = clean
+        CACHE["time"] = now
+        return clean
+    except:
+        return ""
 
-            PORTFOLIO_CACHE["content"] = clean
-            PORTFOLIO_CACHE["last_fetch"] = now
-            return clean
-    except Exception:
-        pass
-
-    return ""
-
-
-def build_system_prompt():
-    portfolio_text = fetch_portfolio_content()
-
+def system_prompt():
     return f"""
-You are **JARVIS**, a hacker-style personal AI assistant.
+You are JARVIS, a calm and honest personal AI assistant.
 
-Your master is **Sensei (Sri chaRAN)**:
-- Student & self-taught developer
-- Built this AI chatbot and portfolio
-- Interested in Python, Flask, AI, backend & hacker aesthetics
+About Sensei (Sri chaRAN):
+- Student developer
+- Learning C, Python, frontend & backend
+- Deploys projects and fixes real bugs
+- Uses open-source AI tools (not hype)
 
-PERSONALITY:
-- Call him **Sensei**
-- Confident, intelligent, calm dominance
-- Slightly sarcastic but respectful
-- Hacker / terminal vibe
-
-RULES:
-- Be project-aware
-- Use the portfolio content below when answering
-- If asked about projects, skills, experience → answer from portfolio
-- Never say you "scraped" or "fetched" anything
-
-==============================
-📁 PORTFOLIO DATA (REFERENCE)
-==============================
-{portfolio_text}
-==============================
-
-Respond clearly, confidently, and intelligently.
+Portfolio context:
+{get_portfolio_text()}
 """
 
-
+# ✅ SERVE UI
 @app.route("/")
-def home():
-    return jsonify({"status": "JARVIS ONLINE"})
+def index():
+    return render_template("index.html")
 
-
+# ✅ CHAT API
 @app.route("/api/chat/stream", methods=["POST"])
 def chat_stream():
     data = request.get_json()
     message = data.get("message", "").strip()
-
-    if not message:
-        return jsonify({"error": "Empty message"}), 400
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -99,36 +65,31 @@ def chat_stream():
     payload = {
         "model": MODEL,
         "messages": [
-            {"role": "system", "content": build_system_prompt()},
+            {"role": "system", "content": system_prompt()},
             {"role": "user", "content": message}
         ],
         "stream": True
     }
 
     def generate():
-        try:
-            with requests.post(
-                OPENROUTER_URL,
-                headers=headers,
-                json=payload,
-                stream=True,
-                timeout=30
-            ) as r:
-                for line in r.iter_lines():
-                    if line and line.startswith(b"data: "):
-                        yield line.decode() + "\n\n"
-        except Exception:
-            yield f"data: {json.dumps({'error': 'Stream interrupted'})}\n\n"
+        with requests.post(
+            OPENROUTER_URL,
+            headers=headers,
+            json=payload,
+            stream=True,
+            timeout=30
+        ) as r:
+            for line in r.iter_lines():
+                if line and line.startswith(b"data: "):
+                    yield line.decode() + "\n\n"
 
     return Response(
         stream_with_context(generate()),
         mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no"
-        }
+        headers={"Cache-Control": "no-cache"}
     )
 
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+# ✅ HEALTH CHECK (optional)
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok"})
